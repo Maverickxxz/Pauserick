@@ -1,0 +1,102 @@
+#include <windows.h>
+#include <commctrl.h>
+#include "resource.h"
+#include "version.h"
+
+IDI_APP ICON "pauserick.ico"
+IDI_PAUSED ICON "pauserick_paused.ico"
+
+1 RT_MANIFEST "pauserick.manifest"
+
+VS_VERSION_INFO VERSIONINFO
+FILEVERSION     PAUSERICK_VER_MAJOR,PAUSERICK_VER_MINOR,PAUSERICK_VER_PATCH,0
+PRODUCTVERSION  PAUSERICK_VER_MAJOR,PAUSERICK_VER_MINOR,PAUSERICK_VER_PATCH,0
+FILEFLAGSMASK   0x3fL
+FILEFLAGS       0x0L
+FILEOS          VOS_NT_WINDOWS32
+FILETYPE        VFT_APP
+FILESUBTYPE     0x0L
+BEGIN
+    BLOCK "StringFileInfo"
+    BEGIN
+        BLOCK "040904b0"
+        BEGIN
+            VALUE "FileDescription", "Pauserick"
+            VALUE "FileVersion", PAUSERICK_VER_STR
+            VALUE "InternalName", "Pauserick"
+            VALUE "OriginalFilename", "Pauserick.exe"
+            VALUE "ProductName", "Pauserick"
+            VALUE "ProductVersion", PAUSERICK_VER_STR
+        END
+    END
+    BLOCK "VarFileInfo"
+    BEGIN
+        VALUE "Translation", 0x409, 1200
+    END
+END
+
+/* Texts are set at runtime in the chosen language; changes are saved instantly.
+ * Layout: a header (logo, status, progress to the next break), two columns of cards,
+ * a footer with the language and Close. The cards are hidden group boxes whose position
+ * the dialog paints as a card with an icon, a title and a description. The checkboxes are
+ * drawn as switches, the sliders are
+ * Pauserick's own control. Every card: x+10 label, x+54 slider, x+142 value. */
+IDD_SETTINGS DIALOGEX 0, 0, 392, 286
+STYLE DS_SETFONT | DS_MODALFRAME | DS_CENTER | WS_POPUP | WS_CAPTION | WS_SYSMENU | WS_MINIMIZEBOX | WS_CLIPCHILDREN
+EXSTYLE WS_EX_APPWINDOW
+CAPTION "Pauserick"
+FONT 9, "Segoe UI", 400, 0, 0x1
+BEGIN
+    LTEXT           "", IDC_STATUS, 48, 21, 200, 9, SS_ENDELLIPSIS | SS_NOPREFIX
+    PUSHBUTTON      "", IDC_UPDATE, 254, 18, 130, 12
+
+    /* ---- left column ---- */
+    GROUPBOX        "", IDC_GRP_MINI, 8, 42, 184, 68, NOT WS_VISIBLE
+    AUTOCHECKBOX    "", IDC_MINI_ENABLE, 156, 51, 28, 14
+    LTEXT           "", IDC_LBL_MINI_EVERY, 18, 77, 44, 8
+    CONTROL         "", IDC_MINI_EVERY, "PauserickSlider", WS_TABSTOP, 62, 73, 86, 14
+    LTEXT           "", IDC_VAL_MINI_EVERY, 150, 77, 38, 8
+    LTEXT           "", IDC_LBL_MINI_DUR, 18, 93, 44, 8
+    CONTROL         "", IDC_MINI_DUR, "PauserickSlider", WS_TABSTOP, 62, 89, 86, 14
+    LTEXT           "", IDC_VAL_MINI_DUR, 150, 93, 38, 8
+
+    GROUPBOX        "", IDC_GRP_LONG, 8, 116, 184, 68, NOT WS_VISIBLE
+    AUTOCHECKBOX    "", IDC_LONG_ENABLE, 156, 125, 28, 14
+    LTEXT           "", IDC_LBL_LONG_EVERY, 18, 151, 44, 8
+    CONTROL         "", IDC_LONG_EVERY, "PauserickSlider", WS_TABSTOP, 62, 147, 86, 14
+    LTEXT           "", IDC_VAL_LONG_EVERY, 150, 151, 38, 8
+    LTEXT           "", IDC_LBL_LONG_DUR, 18, 167, 44, 8
+    CONTROL         "", IDC_LONG_DUR, "PauserickSlider", WS_TABSTOP, 62, 163, 86, 14
+    LTEXT           "", IDC_VAL_LONG_DUR, 150, 167, 38, 8
+
+    /* idle pause: on/off + minutes, then what the timers do when the user is back */
+    GROUPBOX        "", IDC_GRP_IDLE, 8, 190, 184, 68, NOT WS_VISIBLE
+    AUTOCHECKBOX    "", IDC_IDLE_ENABLE, 156, 199, 28, 14
+    LTEXT           "", IDC_LBL_IDLE_AFTER, 18, 225, 44, 8
+    CONTROL         "", IDC_IDLE, "PauserickSlider", WS_TABSTOP, 62, 221, 86, 14
+    LTEXT           "", IDC_VAL_IDLE, 150, 225, 38, 8
+    LTEXT           "", IDC_LBL_RESUME, 18, 241, 44, 8
+    COMBOBOX        IDC_RESUME, 64, 238, 118, 60, CBS_DROPDOWNLIST | WS_VSCROLL | WS_TABSTOP
+
+    /* ---- right column ---- */
+    GROUPBOX        "", IDC_GRP_GENERAL, 200, 42, 184, 116, NOT WS_VISIBLE
+    AUTOCHECKBOX    "", IDC_AUTOSTART, 210, 63, 166, 14
+    AUTOCHECKBOX    "", IDC_STRICT, 210, 79, 166, 22
+    AUTOCHECKBOX    "", IDC_SOUND, 210, 103, 166, 14
+    AUTOCHECKBOX    "", IDC_AUTOUPDATE, 210, 119, 166, 14
+    LTEXT           "", IDC_LBL_WARN, 210, 141, 44, 8
+    CONTROL         "", IDC_WARN, "PauserickSlider", WS_TABSTOP, 254, 137, 86, 14
+    LTEXT           "", IDC_VAL_WARN, 342, 141, 38, 8
+
+    GROUPBOX        "", IDC_GRP_GAMING, 200, 164, 184, 94, NOT WS_VISIBLE
+    AUTOCHECKBOX    "", IDC_GAMING, 348, 173, 28, 14
+    LTEXT           "", IDC_LBL_GAMES, 210, 197, 166, 8
+    EDITTEXT        IDC_GAMES, 210, 208, 110, 14, ES_AUTOHSCROLL
+    PUSHBUTTON      "", IDC_PICK_GAMES, 324, 207, 52, 16
+    LTEXT           "", IDC_LBL_GAMES_AUTO, 210, 229, 166, 26
+
+    /* ---- footer ---- */
+    LTEXT           "", IDC_LBL_LANG, 24, 270, 38, 8
+    COMBOBOX        IDC_LANG, 64, 267, 88, 80, CBS_DROPDOWNLIST | CBS_OWNERDRAWFIXED | CBS_HASSTRINGS | WS_VSCROLL | WS_TABSTOP
+    PUSHBUTTON      "", IDCANCEL, 324, 265, 60, 16
+END

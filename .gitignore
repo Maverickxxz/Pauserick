@@ -1,0 +1,7 @@
+# build output: the exe is published as a GitHub release asset, not committed
+build/
+dist/
+
+# never commit a signing key (it lives outside the repository anyway)
+*.key
+*.sig

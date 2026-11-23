@@ -1,0 +1,31 @@
+# Builds Pauserick on every push and pull request, so anyone can see that the code
+# compiles and download an (unsigned) build of exactly that commit. Releases are signed
+# on the maintainer's PC with release.bat: the signing key never goes to GitHub.
+name: build
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: msys2/setup-msys2@v2
+        with:
+          msystem: MINGW64
+          install: mingw-w64-x86_64-gcc
+
+      - name: Build
+        shell: msys2 {0}
+        run: cmd //c build.bat
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Pauserick-unsigned-${{ github.sha }}
+          path: dist/Pauserick.exe

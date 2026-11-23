@@ -1,0 +1,45 @@
+# Builds a release on GitHub: Actions > "release" > Run workflow.
+# It compiles Pauserick from the chosen branch, checks that the exe carries the version in
+# src/version.h, and creates a DRAFT release "v<version>" with Pauserick.exe attached.
+# Drafts are invisible to the updater. The maintainer then downloads the exe, signs it on
+# their own PC (sign-release.bat), attaches Pauserick.exe.sig and publishes: the private
+# key never comes to GitHub. See RELEASING.md.
+name: release
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: msys2/setup-msys2@v2
+        with:
+          msystem: MINGW64
+          install: mingw-w64-x86_64-gcc
+
+      - name: Build
+        shell: msys2 {0}
+        run: cmd //c build.bat
+
+      - name: Create the draft release
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $m = Select-String -Path src/version.h -Pattern '#define PAUSERICK_VER_STR\s+"(\d+\.\d+\.\d+)"'
+          if (-not $m) { throw "No version found in src/version.h" }
+          $v = $m.Matches[0].Groups[1].Value
+          $exeVersion = (Get-Item dist/Pauserick.exe).VersionInfo.FileVersion
+          if ($exeVersion -ne $v) { throw "The exe says $exeVersion but src/version.h says $v" }
+          gh release view "v$v" *> $null
+          if ($LASTEXITCODE -eq 0) { throw "Release v$v already exists: raise the version in src/version.h first" }
+          $hash = (Get-FileHash dist/Pauserick.exe -Algorithm SHA256).Hash.ToLower()
+          $notes = "What's new:`n- `n`n---`nBuilt by GitHub Actions from commit $env:GITHUB_SHA.`nSHA-256 of Pauserick.exe: $hash"
+          gh release create "v$v" dist/Pauserick.exe --draft --title "Pauserick $v" --notes "$notes" --target "$env:GITHUB_SHA"
+          Write-Host "Draft release v$v created. Next: download Pauserick.exe, sign it, attach Pauserick.exe.sig, publish."
