@@ -6,8 +6,8 @@
 #ifndef PAUSERICK_VER_MAJOR
 #define PAUSERICK_VER_MAJOR 1
 #define PAUSERICK_VER_MINOR 0
-#define PAUSERICK_VER_PATCH 0
-#define PAUSERICK_VER_STR   "1.0.0"
+#define PAUSERICK_VER_PATCH 1
+#define PAUSERICK_VER_STR   "1.0.1"
 #endif
 
 /* GitHub repository the updater checks: https://github.com/<this>/releases */

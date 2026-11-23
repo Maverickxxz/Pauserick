@@ -45,7 +45,7 @@ To install a newer exe by hand while **Block Task Manager** is on: Exit Pauseric
 ## Privacy
 
 - No telemetry, no accounts, no ads. Settings and the log stay in `%APPDATA%\Pauserick`.
-- The only connections are to GitHub, over HTTPS: once a day to `api.github.com` to read the latest release (a few KB), and to `github.com` to download it when you choose Install. If GitHub's API is busy (it answers only 60 requests an hour per internet address, which a shared network can use up), Pauserick reads the latest version from the `github.com` releases page instead. GitHub sees what any web request shows: your IP address and the app name and version (`Pauserick/1.0.0`). Nothing about you or your PC is sent.
+- The only connections are to GitHub, over HTTPS: once a day to `api.github.com` to read the latest release (a few KB), and to `github.com` to download it when you choose Install. If GitHub's API is busy (it answers only 60 requests an hour per internet address, which a shared network can use up), Pauserick reads the latest version from the `github.com` releases page instead. GitHub sees what any web request shows: your IP address and the app name and version (for example `Pauserick/1.0.1`). Nothing about you or your PC is sent.
 - Turn off **Automatic updates** and Pauserick never goes online by itself.
 
 ## Settings
