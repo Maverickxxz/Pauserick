@@ -170,7 +170,7 @@ static const WCHAR *const STR[LANG_COUNT][S_COUNT] = {
         [S_GAMES_AUTO]    = L"Games from Steam, Epic, GOG, Xbox, EA, Ubisoft, Riot and Rockstar, and anything in "
                             L"exclusive fullscreen, are recognized automatically.",
         [S_STRICT_HINT]   = L"Asks for admin rights once",
-        [S_AUTOUPDATE]    = L"Check for updates every day",
+        [S_AUTOUPDATE]    = L"Automatic updates",
         [S_UPD_CHECK]     = L"Check for updates",
         [S_UPD_CHECKING]  = L"Checking...",
         [S_UPD_LATEST]    = L"You have the latest version",
@@ -235,7 +235,7 @@ static const WCHAR *const STR[LANG_COUNT][S_COUNT] = {
         [S_WARN]          = L"Preavviso",
         [S_IDLE]          = L"Pausa se inattivo per",
         [S_WHEN_BACK]     = L"Al ritorno",
-        [S_RESUME_RESTART]  = L"Riparti da capo",
+        [S_RESUME_RESTART]  = L"Riparti da capo con il timer",
         [S_RESUME_CONTINUE] = L"Continua con i minuti rimanenti",
         [S_MINI_DESC]     = L"Breve, per riposare gli occhi",
         [S_LONG_DESC]     = L"Più lunga, per alzarti e muoverti",
@@ -246,7 +246,7 @@ static const WCHAR *const STR[LANG_COUNT][S_COUNT] = {
         [S_GAMES_AUTO]    = L"I giochi di Steam, Epic, GOG, Xbox, EA, Ubisoft, Riot e Rockstar, e tutto ciò che "
                             L"va a schermo intero esclusivo, sono riconosciuti da soli.",
         [S_STRICT_HINT]   = L"Chiede i diritti di admin una volta",
-        [S_AUTOUPDATE]    = L"Cerca aggiornamenti ogni giorno",
+        [S_AUTOUPDATE]    = L"Aggiornamenti automatici",
         [S_UPD_CHECK]     = L"Cerca aggiornamenti",
         [S_UPD_CHECKING]  = L"Controllo in corso...",
         [S_UPD_LATEST]    = L"Hai l'ultima versione",
@@ -356,13 +356,13 @@ static void ini_put(const WCHAR *sec, const WCHAR *key, int v)
 
 static void settings_load(void)
 {
-    /* Defaults: a 30 s mini break every 30 min, long breaks off, pause after 3 idle minutes. */
+    /* Defaults: a 30 s mini break every 30 min, a 3 min break every hour, pause after 3 idle minutes. */
     g_cfg.miniEnabled    = ini_int(L"MiniBreak", L"Enabled", 1, 0, 1);
     g_cfg.miniEveryMin   = ini_int(L"MiniBreak", L"EveryMinutes", 30, LIM_MINI_EVERY);
     g_cfg.miniDurSec     = ini_int(L"MiniBreak", L"DurationSeconds", 30, LIM_MINI_DUR);
-    g_cfg.longEnabled    = ini_int(L"Break", L"Enabled", 0, 0, 1);
+    g_cfg.longEnabled    = ini_int(L"Break", L"Enabled", 1, 0, 1);
     g_cfg.longEveryMin   = ini_int(L"Break", L"EveryMinutes", 60, LIM_LONG_EVERY);
-    g_cfg.longDurMin     = ini_int(L"Break", L"DurationMinutes", 5, LIM_LONG_DUR);
+    g_cfg.longDurMin     = ini_int(L"Break", L"DurationMinutes", 3, LIM_LONG_DUR);
     g_cfg.warnSec        = ini_int(L"General", L"WarnSeconds", 0, LIM_WARN);
     /* Up to 1.2 the only idle setting was IdleResetMinutes (0 = off): keep "off" if it was off. */
     int oldIdle          = (int)GetPrivateProfileIntW(L"General", L"IdleResetMinutes", -1, g_ini);
@@ -1306,10 +1306,26 @@ static LRESULT CALLBACK warn_proc(HWND h, UINT m, WPARAM wp, LPARAM lp)
     return DefWindowProcW(h, m, wp, lp);
 }
 
+#ifdef PAUSERICK_TEST_TASK
+static int g_timingLog; /* --timing-log: how late each countdown shows its new second */
+static int g_offscreen; /* --offscreen: Settings drawn off the screen (screenshots) */
+static void timing_log(const WCHAR *what, ULONGLONG at)
+{
+    ULONGLONG now = now_ms();
+    if (!g_timingLog || at <= now) return;
+    ULONGLONG rem = at - now, shown = (rem + 999) / 1000;
+    log_info(L"timing: %s shows %u s, updated %u ms after that second began", what, (unsigned)shown,
+             (unsigned)(shown * 1000 - rem));
+}
+#endif
+
 static void warn_show(int type, ULONGLONG at)
 {
     g_warnType = type;
     g_warnAt = at;
+#ifdef PAUSERICK_TEST_TASK
+    timing_log(L"warning", at);
+#endif
     if (g_warn) { InvalidateRect(g_warn, NULL, FALSE); return; }
 
     POINT origin = { 0, 0 };
@@ -1710,10 +1726,13 @@ static HWND g_appHwnd; /* the app the user is really in (ignores our own windows
 static void tick(void);
 static void tray_show_paused(int paused);
 
+/* tolerance 0 = on time. (For SetCoalescableTimer 0 would mean "the system default", which
+ * lets Windows delay the timers of a hidden window such as ours: the warning's countdown
+ * then lagged behind. A countdown must not, so 0 becomes "no coalescing".) */
 static void set_tick(UINT ms, UINT tolerance)
 {
     if (ms < 10) ms = 10;
-    SetCoalescableTimer(g_main, TIMER_TICK, ms, NULL, tolerance);
+    SetCoalescableTimer(g_main, TIMER_TICK, ms, NULL, tolerance ? tolerance : TIMERV_NO_COALESCING);
 }
 
 /* Undo everything a break set up (screens, input block, Task Manager lock). */
@@ -1900,7 +1919,7 @@ static void tick(void)
         g_lastShownSecs = s;
         if (!fgOk && g_nov) force_foreground(g_ov[0].hwnd);
         UINT d = ms_to_next_second(g_breakEnd, now);
-        SetTimer(g_main, TIMER_TICK, d > 500 ? 500 : d, NULL);
+        set_tick(d > 500 ? 500 : d, 0);
         return;
     }
 
@@ -3457,6 +3476,16 @@ static void dlg_status(HWND d)
     fmt_status(s, TRUE);
     GetDlgItemTextW(d, IDC_STATUS, cur, ARRAYSIZE(cur));
     if (lstrcmpW(s, cur)) SetDlgItemTextW(d, IDC_STATUS, s);
+    /* Next refresh exactly when the countdown shown changes its second, the same moment the
+     * warning and the break screen change theirs, so they never disagree. */
+    int t;
+    ULONGLONG at = 0, now = now_ms();
+    if (g_state == ST_BREAK) at = g_breakEnd;
+    else if (g_pauseFlags || g_gamingNow || !next_break(&t, &at)) at = 0;
+#ifdef PAUSERICK_TEST_TASK
+    if (at && g_state != ST_BREAK) timing_log(L"settings", at);
+#endif
+    SetCoalescableTimer(d, DLG_TIMER_STATUS, at > now ? ms_to_next_second(at, now) : 1000, NULL, TIMERV_NO_COALESCING);
     if (g_ui.brBg) { /* the dot and the progress bar */
         RECT a = ui_dot_rect(d), b = ui_bar_rect(d), u;
         UnionRect(&u, &a, &b);
@@ -3976,7 +4005,7 @@ static INT_PTR CALLBACK settings_proc(HWND d, UINT m, WPARAM wp, LPARAM lp)
         g_dlgDirty = 0;
         dlg_texts(d);
         dlg_sync_enabled(d);
-        SetTimer(d, DLG_TIMER_STATUS, 1000, NULL);
+        dlg_status(d); /* also starts its timer */
         return TRUE;
     }
     case WM_TIMER:
@@ -4066,6 +4095,14 @@ static void show_settings(void)
     if (g_state == ST_BREAK) return;
     if (!g_settings)
         g_settings = CreateDialogParamW(g_inst, MAKEINTRESOURCEW(IDD_SETTINGS), NULL, settings_proc, 0);
+#ifdef PAUSERICK_TEST_TASK
+    if (g_timingLog) return; /* timing test: the window works but stays invisible */
+    if (g_offscreen && g_settings) { /* screenshots: drawn off the screen, nothing pops up */
+        SetWindowPos(g_settings, NULL, -32000, -32000, 0, 0, SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE);
+        ShowWindow(g_settings, SW_SHOWNOACTIVATE);
+        return;
+    }
+#endif
     if (g_settings) {
         ShowWindow(g_settings, SW_SHOWNORMAL);
         SetForegroundWindow(g_settings);
@@ -4623,6 +4660,32 @@ static void updatetest(const WCHAR *outPath)
     write_out(outPath, out, n);
 }
 
+/* Test build only: which breaks come when, over 4 simulated hours with the settings in the
+ * ini, decided by the real next_break(); timers restart at the end of a break as in
+ * break_teardown() (mini always, long after a long break). */
+static void schedtest(const WCHAR *outPath)
+{
+    static char out[4096];
+    int n = 0;
+    ULONGLONG t0 = 1000000000ULL, t = t0, end = t0 + 4ULL * 3600 * 1000;
+    g_miniRef = g_longRef = t0;
+    n += wsprintfA(out + n, "mini every %d min for %d s, break every %d min for %d min\r\n", g_cfg.miniEveryMin,
+                   g_cfg.miniDurSec, g_cfg.longEveryMin, g_cfg.longDurMin);
+    while (t < end && n < (int)sizeof out - 100) {
+        int type;
+        ULONGLONG at;
+        if (!next_break(&type, &at)) break;
+        if (at > t) t = at;
+        ULONGLONG dur = type == BT_LONG ? (ULONGLONG)g_cfg.longDurMin * 60000 : (ULONGLONG)g_cfg.miniDurSec * 1000;
+        unsigned s = (unsigned)((t - t0) / 1000);
+        n += wsprintfA(out + n, "%u:%02u:%02u  %s\r\n", s / 3600, (s / 60) % 60, s % 60, type == BT_LONG ? "BREAK" : "mini break");
+        t += dur;
+        g_miniRef = t;
+        if (type == BT_LONG) g_longRef = t;
+    }
+    write_out(outPath, out, n);
+}
+
 /* Test build only: the update dialog with made-up data, to look at it. */
 static void prompttest(void)
 {
@@ -4755,17 +4818,20 @@ int WINAPI wWinMain(HINSTANCE hi, HINSTANCE prev, PWSTR cmdLine, int show)
     for (int i = 1; argv && i < argc; i++) {
         if (!lstrcmpiW(argv[i], L"--quiet-break")) g_show = 0; /* hidden break screens, input not blocked */
         if (!lstrcmpiW(argv[i], L"--pause-media")) pauseMediaTest = 1; /* only what a break start does to media */
+        if (!lstrcmpiW(argv[i], L"--timing-log")) g_timingLog = 1;
+        if (!lstrcmpiW(argv[i], L"--offscreen")) g_offscreen = 1;
     }
     for (int i = 1; argv && i + 2 < argc; i++)
         if (!lstrcmpiW(argv[i], L"--menutest")) {
             menutestX = (int)wcstol(argv[i + 1], NULL, 10);
             menutestY = (int)wcstol(argv[i + 2], NULL, 10);
         }
-    const WCHAR *idletestOut = NULL, *updtestOut = NULL, *stricttestOut = NULL;
+    const WCHAR *idletestOut = NULL, *updtestOut = NULL, *stricttestOut = NULL, *schedtestOut = NULL;
     int prompttestOn = 0, stricttestOn = 0;
     for (int i = 1; argv && i + 1 < argc; i++) {
         if (!lstrcmpiW(argv[i], L"--idletest")) idletestOut = argv[i + 1];
         if (!lstrcmpiW(argv[i], L"--update-test")) updtestOut = argv[i + 1];
+        if (!lstrcmpiW(argv[i], L"--schedtest")) schedtestOut = argv[i + 1];
         if (!lstrcmpiW(argv[i], L"--strict-on-test")) { stricttestOut = argv[i + 1]; stricttestOn = 1; }
         if (!lstrcmpiW(argv[i], L"--strict-off-test")) stricttestOut = argv[i + 1];
     }
@@ -4827,6 +4893,7 @@ int WINAPI wWinMain(HINSTANCE hi, HINSTANCE prev, PWSTR cmdLine, int show)
 #ifdef PAUSERICK_TEST_TASK
     /* test hooks that must run before the Block Task Manager relaunch below */
     if (updtestOut) { settings_load(); updatetest(updtestOut); return 0; }
+    if (schedtestOut) { settings_load(); schedtest(schedtestOut); return 0; }
     if (stricttestOut) { settings_load(); stricttest(stricttestOut, stricttestOn); return 0; }
     if (prompttestOn) { settings_load(); prompttest(); return 0; }
 #endif
@@ -4938,6 +5005,9 @@ int WINAPI wWinMain(HINSTANCE hi, HINSTANCE prev, PWSTR cmdLine, int show)
     if (pauseMediaTest) { media_pause_thread(NULL); return 0; }
 #endif
     WTSRegisterSessionNotification(g_main, NOTIFY_FOR_THIS_SESSION);
+#ifdef PAUSERICK_TEST_TASK
+    if (!g_timingLog) /* timing test: no tray icon, nothing on screen */
+#endif
     tray_add();
 
     g_miniRef = g_longRef = now_ms();

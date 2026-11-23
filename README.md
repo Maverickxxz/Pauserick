@@ -36,7 +36,7 @@ Once a day Pauserick asks GitHub whether there is a newer release (the first tim
 - **Not now**: it asks again the next day;
 - **Skip this version**: it stays quiet until a later version comes out.
 
-**Check for updates** in the top right corner of Settings checks right away. The daily check can be turned off in Settings (**Check for updates every day**).
+**Check for updates** in the top right corner of Settings checks right away. The daily check can be turned off in Settings (**Automatic updates**).
 
 Every release carries `Pauserick.exe.sig`, an ECDSA P-256 signature made with the maintainer's private key, over the exe and the version it claims. Pauserick contains the matching public key and installs a download only if the signature matches. So nobody else can push an update to your PC: not someone in the middle of your connection, and not even someone who took over the GitHub account, because the private key never leaves the maintainer's PC. An older signed version can't be passed off as a newer one either. If the exe's folder needs administrator rights (Program Files), Windows asks for them when you click Install, unless Pauserick already runs elevated.
 
@@ -46,7 +46,7 @@ To install a newer exe by hand while **Block Task Manager** is on: Exit Pauseric
 
 - No telemetry, no accounts, no ads. Settings and the log stay in `%APPDATA%\Pauserick`.
 - The only connections are to GitHub, over HTTPS: once a day to `api.github.com` to read the latest release (a few KB), and to `github.com` to download it when you choose Install. If GitHub's API is busy (it answers only 60 requests an hour per internet address, which a shared network can use up), Pauserick reads the latest version from the `github.com` releases page instead. GitHub sees what any web request shows: your IP address and the app name and version (`Pauserick/1.0.0`). Nothing about you or your PC is sent.
-- Turn off **Check for updates every day** and Pauserick never goes online by itself.
+- Turn off **Automatic updates** and Pauserick never goes online by itself.
 
 ## Settings
 
@@ -54,15 +54,15 @@ The window follows the Windows 11 look: a header with the logo, the live status 
 
 | Setting | Meaning |
 |---|---|
-| Mini break: every / duration | Sliders: 1 min to 2 h / 5 s to 5 min. Short, to rest your eyes |
-| Break: every / duration | Sliders: 10 min to 4 h / 1 min to 1 h. Longer, to get up and move. A mini break due shortly before a break is skipped |
+| Mini break: every / duration | On by default, every 30 min for 30 s. Sliders: 1 min to 2 h / 5 s to 5 min. Short, to rest your eyes |
+| Break: every / duration | On by default, every hour for 3 min. Sliders: 10 min to 4 h / 1 min to 1 h. Longer, to get up and move. When both are due, the break takes the mini break's place (see [below](#mini-breaks-and-breaks-together)) |
 | Start with Windows | On or off at any time. Normally this is an HKCU `Run` entry. With Task Manager blocking on, it is the logon trigger of that task |
 | Block Task Manager during breaks | Off by default. When on, Pauserick runs from `C:\Program Files\Pauserick` with admin rights, through a scheduled task named "Pauserick". That lets it disable Task Manager during breaks and also block input aimed at elevated windows |
 | Sound when a break ends | Windows "Asterisk" system sound |
-| Check for updates every day | On by default. See [Updates](#updates) |
+| Automatic updates | On by default: once a day it looks for a new version. See [Updates](#updates) |
 | Warn before | Slider: Off to 2 min. Shows a small corner notice, "Mini break in 10 s". It has no buttons, so a break can't be postponed |
 | Inactivity: after | On by default, 3 min. Slider: 1 min to 1 h. After this long without keyboard or mouse input Pauserick pauses: the countdown stops, the tray icon's pause bars turn red and the status reads "Paused: the PC is idle". Sound playing or a fullscreen window counts as watching, so a video still gets its breaks: the pause needs 30 s with nothing playing. The first input ends the pause. The card's switch turns it off |
-| When back | What the timers do after an idle pause: **Restart the timers from zero** (default) or **Continue with the time left**, that is, from where the countdown stopped when the pause began. A locked or sleeping PC always stops the timers. Once back, they restart from zero if it lasted at least the idle time and "restart" is chosen; otherwise they continue |
+| When back | What the timers do after an idle pause: **Restart the timers from zero** ("Riparti da capo con il timer" in Italian, the default) or **Continue with the time left**, that is, from where the countdown stopped when the pause began. A locked or sleeping PC always stops the timers. Once back, they restart from zero if it lasted at least the idle time and "restart" is chosen; otherwise they continue |
 | Language | At the bottom: English or Italiano, each with its flag. Applies at once to Settings, the tray menu, the warning and the break screen |
 | Gaming mode | On by default. No breaks and no warnings while the foreground app is a game: either recognized automatically or in the list below. The tray icon's pause bars then turn red, and the tray tooltip, the tray menu and the status line at the top of Settings show "Pauserick paused for process X". Opening Settings or the tray menu, or clicking the taskbar, doesn't count as leaving the game; closing the game does. The timers start fresh afterwards, so a quick Alt-Tab doesn't trigger an overdue break. A game left open in the background doesn't stop breaks, and videos (browser, players) still get theirs |
 | Other games | Extra games, separated by `;`, for example `Overwatch.exe; RetroArch.exe`. Writing `.exe` is optional, and a folder path also works. They count while they are in front. **Choose app...** lists the apps open right now with their icons and a checkbox on the left, filled with a tick when the app is already in the list. Click an entry to add or remove it |
@@ -70,6 +70,19 @@ The window follows the Windows 11 look: a header with the logo, the live status 
 Each slider shows its value on the right. Click anywhere on it or drag the knob, or use the mouse wheel, the arrow keys, Page Up/Down and Home/End. A value is saved as soon as you release the slider.
 
 Settings are stored in `%APPDATA%\Pauserick\settings.ini`.
+
+### Mini breaks and breaks together
+
+Each has its own timer. The break's hour keeps running through mini breaks, and a mini break's 30 minutes start again after every break of either kind. When a mini break would come shortly before a break (within half a mini-break interval), it is skipped and the break comes instead, so the two never come back to back. With the defaults:
+
+| Time | What happens |
+|---|---|
+| 0:30 | mini break, 30 s |
+| 1:00 | break, 3 min (it takes the place of the mini break due at 1:00:30) |
+| 1:33 | mini break, 30 min after the break ended |
+| 2:03 | break, an hour after the previous one ended |
+
+And so on: one mini break between two breaks, about every half hour. The warning (if set) and the countdown in Settings always show whichever comes next.
 
 ### How a game is recognized
 
