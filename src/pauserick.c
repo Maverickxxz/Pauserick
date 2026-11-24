@@ -1160,6 +1160,20 @@ static void draw_centered(HDC dc, HFONT f, const RECT *r, const WCHAR *s, COLORR
     SelectObject(dc, old);
 }
 
+static void overlay_paint(const Overlay *o, HDC dc, const RECT *area)
+{
+    WCHAR t[24];
+    fmt_clock(t, secs_left(g_breakEnd, now_ms()));
+    int saved = SaveDC(dc);
+    ExcludeClipRect(dc, o->rcTitle.left, o->rcTitle.top, o->rcTitle.right, o->rcTitle.bottom);
+    ExcludeClipRect(dc, o->rcTime.left, o->rcTime.top, o->rcTime.right, o->rcTime.bottom);
+    FillRect(dc, area, (HBRUSH)GetStockObject(BLACK_BRUSH));
+    RestoreDC(dc, saved);
+    SetBkColor(dc, RGB(0, 0, 0));
+    draw_centered(dc, o->fTitle, &o->rcTitle, T(g_breakType == BT_LONG ? S_BREAK : S_MINI_BREAK), RGB(130, 130, 130));
+    draw_centered(dc, o->fTime, &o->rcTime, t, RGB(235, 235, 235));
+}
+
 static LRESULT CALLBACK overlay_proc(HWND h, UINT m, WPARAM wp, LPARAM lp)
 {
     Overlay *o = (Overlay *)GetWindowLongPtrW(h, GWLP_USERDATA);
@@ -1178,16 +1192,7 @@ static LRESULT CALLBACK overlay_proc(HWND h, UINT m, WPARAM wp, LPARAM lp)
         if (!o) break;
         PAINTSTRUCT ps;
         HDC dc = BeginPaint(h, &ps);
-        WCHAR t[24];
-        fmt_clock(t, secs_left(g_breakEnd, now_ms()));
-        int saved = SaveDC(dc);
-        ExcludeClipRect(dc, o->rcTitle.left, o->rcTitle.top, o->rcTitle.right, o->rcTitle.bottom);
-        ExcludeClipRect(dc, o->rcTime.left, o->rcTime.top, o->rcTime.right, o->rcTime.bottom);
-        FillRect(dc, &ps.rcPaint, (HBRUSH)GetStockObject(BLACK_BRUSH));
-        RestoreDC(dc, saved);
-        SetBkColor(dc, RGB(0, 0, 0));
-        draw_centered(dc, o->fTitle, &o->rcTitle, T(g_breakType == BT_LONG ? S_BREAK : S_MINI_BREAK), RGB(130, 130, 130));
-        draw_centered(dc, o->fTime, &o->rcTime, t, RGB(235, 235, 235));
+        overlay_paint(o, dc, &ps.rcPaint);
         EndPaint(h, &ps);
         return 0;
     }
@@ -1260,6 +1265,29 @@ static void warn_close(void)
     if (g_state == ST_WARN) g_state = ST_IDLE;
 }
 
+static void warn_draw(HDC dc, RECT rc)
+{
+    HBRUSH bg = CreateSolidBrush(RGB(28, 28, 28)), ac = CreateSolidBrush(RGB(15, 118, 110));
+    FillRect(dc, &rc, bg);
+    RECT bar = rc;
+    bar.right = MulDiv(5, (int)g_warnDpi, 96);
+    FillRect(dc, &bar, ac);
+    DeleteObject(bg);
+    DeleteObject(ac);
+
+    WCHAR t[64], c[24];
+    ULONGLONG s = secs_left(g_warnAt, now_ms());
+    const WCHAR *name = T(g_warnType == BT_LONG ? S_BREAK : S_MINI_BREAK);
+    if (s >= 60) { fmt_clock(c, s); wsprintfW(t, T(S_IN_CLOCK_FMT), name, c); }
+    else         wsprintfW(t, T(S_IN_SEC_FMT), name, (unsigned)s);
+    SetBkMode(dc, TRANSPARENT);
+    SetTextColor(dc, RGB(240, 240, 240));
+    HGDIOBJ of = SelectObject(dc, g_warnFont);
+    rc.left = bar.right;
+    DrawTextW(dc, t, -1, &rc, DT_CENTER | DT_VCENTER | DT_SINGLELINE | DT_NOPREFIX);
+    SelectObject(dc, of);
+}
+
 static LRESULT CALLBACK warn_proc(HWND h, UINT m, WPARAM wp, LPARAM lp)
 {
     switch (m) {
@@ -1273,26 +1301,7 @@ static LRESULT CALLBACK warn_proc(HWND h, UINT m, WPARAM wp, LPARAM lp)
         HDC mem = CreateCompatibleDC(dc);
         HBITMAP bmp = CreateCompatibleBitmap(dc, rc.right, rc.bottom);
         HGDIOBJ ob = SelectObject(mem, bmp);
-        HBRUSH bg = CreateSolidBrush(RGB(28, 28, 28)), ac = CreateSolidBrush(RGB(15, 118, 110));
-        FillRect(mem, &rc, bg);
-        RECT bar = rc;
-        bar.right = MulDiv(5, (int)g_warnDpi, 96);
-        FillRect(mem, &bar, ac);
-        DeleteObject(bg);
-        DeleteObject(ac);
-
-        WCHAR t[64], c[24];
-        ULONGLONG s = secs_left(g_warnAt, now_ms());
-        const WCHAR *name = T(g_warnType == BT_LONG ? S_BREAK : S_MINI_BREAK);
-        if (s >= 60) { fmt_clock(c, s); wsprintfW(t, T(S_IN_CLOCK_FMT), name, c); }
-        else         wsprintfW(t, T(S_IN_SEC_FMT), name, (unsigned)s);
-        SetBkMode(mem, TRANSPARENT);
-        SetTextColor(mem, RGB(240, 240, 240));
-        HGDIOBJ of = SelectObject(mem, g_warnFont);
-        rc.left = bar.right;
-        DrawTextW(mem, t, -1, &rc, DT_CENTER | DT_VCENTER | DT_SINGLELINE | DT_NOPREFIX);
-        SelectObject(mem, of);
-        GetClientRect(h, &rc);
+        warn_draw(mem, rc);
         BitBlt(dc, 0, 0, rc.right, rc.bottom, mem, 0, 0, SRCCOPY);
         SelectObject(mem, ob);
         DeleteObject(bmp);
@@ -4696,6 +4705,87 @@ static void prompttest(void)
     update_prompt();
 }
 
+/* Test build only: --render <dir> <width> <height> <dpi>. The break screen and the warning,
+ * drawn by their own paint code into bitmaps (no window ever shows), as frames for the
+ * README animation: break_30.bmp ... break_01.bmp and warn_5.bmp ... warn_1.bmp. */
+static void render_save(const WCHAR *path, const void *bits, int w, int h)
+{
+    BITMAPFILEHEADER fh = { 0x4D42, 0, 0, 0, sizeof(BITMAPFILEHEADER) + sizeof(BITMAPINFOHEADER) };
+    BITMAPINFOHEADER ih = { sizeof(BITMAPINFOHEADER), w, -h, 1, 32, BI_RGB, 0, 0, 0, 0, 0 };
+    DWORD size = (DWORD)w * (DWORD)h * 4, wr;
+    fh.bfSize = fh.bfOffBits + size;
+    GdiFlush();
+    HANDLE f = CreateFileW(path, GENERIC_WRITE, 0, NULL, CREATE_ALWAYS, 0, NULL);
+    if (f == INVALID_HANDLE_VALUE) return;
+    WriteFile(f, &fh, sizeof fh, &wr, NULL);
+    WriteFile(f, &ih, sizeof ih, &wr, NULL);
+    WriteFile(f, bits, size, &wr, NULL);
+    CloseHandle(f);
+}
+
+static HBITMAP render_dib(HDC dc, int w, int h, void **bits)
+{
+    BITMAPINFO bi;
+    ZeroMemory(&bi, sizeof bi);
+    bi.bmiHeader.biSize = sizeof bi.bmiHeader;
+    bi.bmiHeader.biWidth = w;
+    bi.bmiHeader.biHeight = -h; /* top-down, like render_save writes it */
+    bi.bmiHeader.biPlanes = 1;
+    bi.bmiHeader.biBitCount = 32;
+    bi.bmiHeader.biCompression = BI_RGB;
+    return CreateDIBSection(dc, &bi, DIB_RGB_COLORS, bits, NULL, 0);
+}
+
+static void render_frames(const WCHAR *dir, int w, int h, int dpi)
+{
+    WCHAR path[MAX_PATH];
+    void *bits = NULL;
+    HDC dc = CreateCompatibleDC(NULL);
+    if (!dc) return;
+
+    Overlay o;
+    ZeroMemory(&o, sizeof o);
+    overlay_layout(&o, w, h); /* no window: text metrics come from the screen DC */
+    HBITMAP bmp = render_dib(dc, w, h, &bits);
+    if (bmp && bits) {
+        HGDIOBJ old = SelectObject(dc, bmp);
+        RECT rc = { 0, 0, w, h };
+        g_breakType = BT_MINI;
+        for (int s = 30; s >= 1; s--) {
+            g_breakEnd = now_ms() + (ULONGLONG)s * 1000 - 500;
+            overlay_paint(&o, dc, &rc);
+            wsprintfW(path, L"%s\\break_%02d.bmp", dir, s);
+            render_save(path, bits, w, h);
+        }
+        SelectObject(dc, old);
+    }
+    if (bmp) DeleteObject(bmp);
+    if (o.fTitle) DeleteObject(o.fTitle);
+    if (o.fTime) DeleteObject(o.fTime);
+
+    /* the warning at the size warn_show() gives it on a monitor with this DPI */
+    int ww = MulDiv(250, dpi, 96), wh = MulDiv(54, dpi, 96);
+    g_warnDpi = (UINT)dpi;
+    g_warnFont = make_font(MulDiv(17, dpi, 96), FW_SEMIBOLD, L"Segoe UI", CLEARTYPE_QUALITY);
+    bits = NULL;
+    bmp = render_dib(dc, ww, wh, &bits);
+    if (bmp && bits && g_warnFont) {
+        HGDIOBJ old = SelectObject(dc, bmp);
+        RECT rc = { 0, 0, ww, wh };
+        g_warnType = BT_MINI;
+        for (int s = 5; s >= 1; s--) {
+            g_warnAt = now_ms() + (ULONGLONG)s * 1000 - 500;
+            warn_draw(dc, rc);
+            wsprintfW(path, L"%s\\warn_%d.bmp", dir, s);
+            render_save(path, bits, ww, wh);
+        }
+        SelectObject(dc, old);
+    }
+    if (bmp) DeleteObject(bmp);
+    if (g_warnFont) { DeleteObject(g_warnFont); g_warnFont = NULL; }
+    DeleteDC(dc);
+}
+
 /* Test build only: Block Task Manager on / off through the real helper flow. */
 static void stricttest(const WCHAR *outPath, int on)
 {
@@ -4837,6 +4927,15 @@ int WINAPI wWinMain(HINSTANCE hi, HINSTANCE prev, PWSTR cmdLine, int show)
     }
     for (int i = 1; argv && i < argc; i++)
         if (!lstrcmpiW(argv[i], L"--prompt-test")) prompttestOn = 1;
+    const WCHAR *renderDir = NULL;
+    int renderW = 1920, renderH = 1080, renderDpi = 96;
+    for (int i = 1; argv && i + 4 < argc; i++)
+        if (!lstrcmpiW(argv[i], L"--render")) {
+            renderDir = argv[i + 1];
+            renderW = clampi((int)wcstol(argv[i + 2], NULL, 10), 320, 7680);
+            renderH = clampi((int)wcstol(argv[i + 3], NULL, 10), 240, 4320);
+            renderDpi = clampi((int)wcstol(argv[i + 4], NULL, 10), 96, 384);
+        }
     for (int i = 1; argv && i + 1 < argc; i++)
         if (!lstrcmpiW(argv[i], L"--selftest")) {
             selftestOut = argv[i + 1];
@@ -4896,6 +4995,7 @@ int WINAPI wWinMain(HINSTANCE hi, HINSTANCE prev, PWSTR cmdLine, int show)
     if (schedtestOut) { settings_load(); schedtest(schedtestOut); return 0; }
     if (stricttestOut) { settings_load(); stricttest(stricttestOut, stricttestOn); return 0; }
     if (prompttestOn) { settings_load(); prompttest(); return 0; }
+    if (renderDir) { settings_load(); render_frames(renderDir, renderW, renderH, renderDpi); return 0; }
 #endif
 
     g_mutex = CreateMutexW(NULL, TRUE, MUTEX_NAME);

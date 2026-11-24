@@ -4,6 +4,8 @@
 # Drafts are invisible to the updater. The maintainer then downloads the exe, signs it on
 # their own PC (sign-release.bat), attaches Pauserick.exe.sig and publishes: the private
 # key never comes to GitHub. See RELEASING.md.
+# With the optional VT_API_KEY secret (a free VirusTotal API key) the exe is also uploaded
+# to VirusTotal, so the scan link in the draft notes works right away.
 name: release
 
 on:
@@ -31,6 +33,7 @@ jobs:
         shell: pwsh
         env:
           GH_TOKEN: ${{ github.token }}
+          VT_API_KEY: ${{ secrets.VT_API_KEY }}
         run: |
           $m = Select-String -Path src/version.h -Pattern '#define PAUSERICK_VER_STR\s+"(\d+\.\d+\.\d+)"'
           if (-not $m) { throw "No version found in src/version.h" }
@@ -40,6 +43,14 @@ jobs:
           gh release view "v$v" *> $null
           if ($LASTEXITCODE -eq 0) { throw "Release v$v already exists: raise the version in src/version.h first" }
           $hash = (Get-FileHash dist/Pauserick.exe -Algorithm SHA256).Hash.ToLower()
-          $notes = "What's new:`n- `n`n---`nBuilt by GitHub Actions from commit $env:GITHUB_SHA.`nSHA-256 of Pauserick.exe: $hash"
+          $vt = "https://www.virustotal.com/gui/file/$hash"
+          if ($env:VT_API_KEY) {
+            curl.exe -sS --fail -o NUL -H "x-apikey: $env:VT_API_KEY" -F "file=@dist/Pauserick.exe" https://www.virustotal.com/api/v3/files
+            if ($LASTEXITCODE -eq 0) { Write-Host "Uploaded to VirusTotal: $vt" }
+            else { Write-Warning "The VirusTotal upload failed: upload Pauserick.exe on virustotal.com by hand before publishing" }
+          } else {
+            Write-Host "No VT_API_KEY secret: upload Pauserick.exe on virustotal.com by hand before publishing."
+          }
+          $notes = "What's new:`n- `n`n---`nBuilt by GitHub Actions from commit $env:GITHUB_SHA.`nSHA-256 of Pauserick.exe: $hash`nVirusTotal scan: $vt"
           gh release create "v$v" dist/Pauserick.exe --draft --title "Pauserick $v" --notes "$notes" --target "$env:GITHUB_SHA"
           Write-Host "Draft release v$v created. Next: download Pauserick.exe, sign it, attach Pauserick.exe.sig, publish."

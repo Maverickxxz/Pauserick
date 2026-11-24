@@ -16,12 +16,20 @@ not publish an update that Pauserick would install.
    GitHub web editor.
 2. **Build:** on GitHub, **Actions > release > Run workflow**. After 2-3 minutes,
    **Releases** shows a draft "Pauserick 1.0.1" with `Pauserick.exe` attached. The draft
-   notes contain the exe's SHA-256. Drafts are invisible to the updater.
+   notes contain the exe's SHA-256 and a link to its VirusTotal scan. Drafts are invisible
+   to the updater.
 3. **Sign (on your PC):** download `Pauserick.exe` from the draft and drag it onto
    `sign-release.bat` in the repository folder. It writes `Pauserick.exe.sig` next to the
    exe and prints the exe's SHA-256: it must match the one in the draft notes. No compiler
    is needed, only the key (see below).
-4. **Publish:** edit the draft, replace the notes' first part with what's new (the update
+4. **Check VirusTotal:** open the VirusTotal link in the draft notes. With the `VT_API_KEY`
+   secret (see below) the workflow has already uploaded the exe. Without it the page says
+   the file is unknown: drag `Pauserick.exe` onto [virustotal.com](https://www.virustotal.com)
+   and wait for the scan, and the link in the notes then works (it is the exe's SHA-256).
+   A few generic detections from heuristic engines are common for a new unsigned exe that
+   hooks the keyboard. If a well-known engine flags it, send that vendor a false-positive
+   report before publishing.
+5. **Publish:** edit the draft, replace the notes' first part with what's new (the update
    dialog shows the notes under "What's new"), attach `Pauserick.exe.sig`, and publish.
    Do not mark it as a pre-release: the updater only sees the latest full release.
 
@@ -30,6 +38,14 @@ in Settings. A release without `Pauserick.exe.sig` is ignored, never installed.
 
 Without GitHub: `build.bat` builds `dist\Pauserick.exe` locally; drag that onto
 `sign-release.bat` and attach both files to a release by hand.
+
+## VirusTotal upload (optional)
+
+To have the workflow upload every release exe to VirusTotal by itself: create a free account
+on virustotal.com, copy the API key from your profile (**API key**), and add it on GitHub
+under **Settings > Secrets and variables > Actions > New repository secret** with the name
+`VT_API_KEY`. Unlike the signing key this one may live on GitHub: all it allows is
+uploading files to VirusTotal and reading scan results.
 
 ## The signing key
 

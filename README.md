@@ -1,10 +1,13 @@
 # Pauserick
 
-A tiny, strict break reminder for Windows 10/11, in the spirit of Stretchly and Workrave.
+A tiny, strict break reminder for Windows 10/11, in the spirit of Stretchly and Workrave
+([how they compare](#compared-with-stretchly-and-workrave)).
 It's plain Win32/C with no runtime or framework, and the executable is about 220 KB.
 Everything runs on your PC: the only network access is an optional daily update check.
 
-![Pauserick settings](docs/settings.png)
+![A mini break: a notice counts down in the corner, then the whole screen turns black and shows the time left](docs/break.gif)
+
+<sub>A 30-second mini break with the warning set to 5 s, sped up. The warning and the break screen are drawn by Pauserick's own code; the desktop behind them is a mock-up.</sub>
 
 ## Download
 
@@ -14,6 +17,10 @@ There is no installer: it is a single exe.
 The exe is not code-signed with a paid certificate, so the first time Windows SmartScreen may say
 "Windows protected your PC": choose **More info > Run anyway**. Every release is built by GitHub Actions
 from the code in this repository (see [Build](#build)); updates are verified with the maintainer's own signature (see [Updates](#updates)).
+
+The notes of every release link to its [VirusTotal](https://www.virustotal.com) scan. An unsigned program that blocks the keyboard and mouse,
+can disable Task Manager and updates itself is exactly what antivirus heuristics tend to flag, so an occasional generic detection is
+possible. The scan lets you check before running it, and the whole source is here.
 
 ## Install
 
@@ -27,6 +34,36 @@ from the code in this repository (see [Build](#build)); updates are verified wit
    From then on it always runs elevated with no further prompts, whether you launch it by hand or it starts with Windows.
 
 Left-click the tray icon to open Settings. Right-click it for: take a mini break now, take a break now, Settings, Open log file, Exit. Each "take a break" item shows only while that break type is enabled. When a new version has been found, the menu also offers to install it.
+
+## Compared with Stretchly and Workrave
+
+All three measured on the same PC, idle in the tray between two breaks, each with all of its processes added up:
+
+| | Pauserick 1.0.1 | Stretchly 1.22.1 | Workrave 1.11.5 |
+|---|---|---|---|
+| Made with | C, Win32 API | Electron (JavaScript) | C++, GTK |
+| Download | 217 KB (the exe) | 155 MB (installer) | 58 MB (installer) |
+| On disk | 217 KB, 1 file | 446 MB, 219 files | 186 MB, 821 files |
+| Processes | 1 | 4 | 4 |
+| Threads | 2–3 | 125 | 28 |
+| Memory in Task Manager (private working set) | **2.3 MB** | 100 MB | 102 MB |
+| Private bytes (commit) | 5.6 MB | 208 MB | 164 MB |
+| Working set, shared pages included | 9.0 MB | 338 MB | 296 MB |
+| CPU time while idle | 0 ms in 5 min | 0.20 s per minute | 0.28 s per minute |
+
+Stretchly and Workrave do more: both also run on Linux (Stretchly on macOS too), Workrave has exercises and statistics, and both can let you skip or postpone a break. Pauserick is Windows only and does one thing: breaks you can't skip, at almost no cost.
+
+<details>
+<summary>How it was measured</summary>
+
+- **When and where:** 24 November 2026, Windows 11 Pro 26H2 (build 26300), AMD Ryzen 7 9800X3D, 32 GB of RAM.
+- **Builds:** Pauserick 1.0.1 is the [released exe](https://github.com/Maverickxxz/pauserick/releases/tag/v1.0.1). Stretchly and Workrave are the official builds from their GitHub releases: `Stretchly-1.22.1-win.7z` (the files the installer puts on disk, Electron 43) and `workrave-windows-1.11.5-portable.zip`. Download sizes are those of `Stretchly-Setup-1.22.1.exe` and `workrave-windows-1.11.5.exe`; sizes on disk are the unpacked folders. 1 MB = 1024 × 1024 bytes, as Windows counts.
+- **Settings:** the defaults, each app with a fresh settings folder. Two changes, only so that nothing popped up while measuring: Stretchly's first-run welcome window was skipped, and Workrave's micro-break and rest break were moved to 60 and 120 minutes (by default its micro-break comes after 3 minutes of typing). Workrave's small timer window stayed open, as it does by default.
+- **Timing:** Stretchly and Workrave were started together and sampled from minute 4 to minute 9, before Stretchly's first mini break (minute 10). Pauserick had been running for 29 hours by then, with breaks, its daily update check and the Settings window opened along the way.
+- **Sampling:** every 5 s for 5 minutes, 57 samples per app; the table shows the median. Each app counts as its whole process tree: four `Stretchly.exe` processes (Electron's main process and its helpers); `workrave.exe`, `WorkraveCrashHandler.exe`, `WorkraveHelper.exe` and `gdbus.exe`. Memory barely moved, always within 3 % of the median; thread counts moved a little more (Pauserick 2–3, Stretchly 121–131, Workrave 26–40). CPU time is what the whole tree used over the 5 minutes.
+- **Source:** WMI, the same counters Task Manager shows: `Win32_Process` (`WorkingSetSize`, `PrivatePageCount`, `ThreadCount`, `KernelModeTime` + `UserModeTime`) and `Win32_PerfRawData_PerfProc_Process` (`WorkingSetPrivate`). The script is [`tools/measure-idle.ps1`](tools/measure-idle.ps1): start the apps, note their process ids, run it, and compare.
+
+</details>
 
 ## Updates
 
@@ -49,6 +86,8 @@ To install a newer exe by hand while **Block Task Manager** is on: Exit Pauseric
 - Turn off **Automatic updates** and Pauserick never goes online by itself.
 
 ## Settings
+
+![Pauserick settings](docs/settings.png)
 
 The window follows the Windows 11 look: a header with the logo, the live status ("Next mini break in 34:12") and a bar showing how far along the countdown is, then the settings on white cards in two columns, each with an icon, a title and a short description. Switches turn things on and off; a card's switch sits in its title row and greys out the rest of the card when off. The language choice is at the very bottom, with a flag next to each language. The status dot is teal while counting and red while breaks are on hold (PC locked or idle, a game in front).
 
@@ -161,7 +200,8 @@ Each line is appended and the file closed right away, so the log is never locked
 
 ## Resource use (measured on a Windows 11 PC)
 
-- Idle: ~0.2–0.7 MB private working set, ~2.5–3 MB private bytes, 1 thread, 0.0 ms of CPU over 60 s.
+- Idle, after a day of normal use: 2.3 MB private working set (the "Memory" column of Task Manager), 5.6 MB private bytes,
+  2–3 threads, no measurable CPU in 5 minutes. See [the comparison](#compared-with-stretchly-and-workrave) for how it was measured.
   It wakes at most every 5 s (coalescable timer) and runs with EcoQoS ("efficiency mode") between breaks.
 - During a break: ~1.3 MB private working set, one extra thread for the input hooks.
   Pausing the media at the start uses a short-lived thread. The Windows worker threads it wakes wind down within a few minutes, and private bytes go back to the idle figures above.
