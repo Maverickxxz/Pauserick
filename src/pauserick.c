@@ -94,13 +94,15 @@ enum { PAUSE_LOCK = 1, PAUSE_SUSPEND = 2, PAUSE_IDLE = 4 };
 typedef struct {
     int miniEnabled, miniEveryMin, miniDurSec;
     int longEnabled, longEveryMin, longDurMin;
-    int warnSec, sound;
+    int miniWarnSec, longWarnSec; /* warning before each kind of break, 0 = none */
+    int sound;
     int idlePause;     /* pause when the PC is idle */
     int idlePauseMin;  /* ...for this long */
     int idleContinue;  /* when back: 1 = timers continue where they stopped, 0 = restart from zero */
     int lang;          /* LANG_EN / LANG_IT */
     int gaming;        /* no breaks while a game is in the foreground */
-    int autoUpdate;    /* look for a new version once a day */
+    int autoUpdate;    /* look for a new version at start and once a day */
+    int updateNotify;  /* ...and offer it in a window by itself (off: only Settings and the tray menu) */
     WCHAR games[512];  /* extra games: exe names or folders, separated by ';' */
 } Settings;
 
@@ -117,9 +119,10 @@ enum {
     S_GENERAL, S_AUTOSTART, S_STRICT, S_SOUND, S_WARN, S_IDLE,
     S_WHEN_BACK, S_RESUME_RESTART, S_RESUME_CONTINUE,
     S_MINI_DESC, S_LONG_DESC, S_IDLE_GROUP, S_IDLE_DESC, S_AFTER, S_GAMING_DESC, S_GAMES_AUTO,
-    S_STRICT_HINT, S_AUTOUPDATE,
+    S_STRICT_HINT, S_AUTOUPDATE, S_UPD_NOTIFY, S_UPD_KEEP,
     S_UPD_CHECK, S_UPD_CHECKING, S_UPD_LATEST, S_UPD_CHECK_FAILED, S_UPD_GET_FMT, S_UPD_TRAY_FMT,
     S_UPD_TITLE_FMT, S_UPD_TEXT_FMT, S_UPD_INSTALL, S_UPD_LATER, S_UPD_SKIP, S_UPD_NOTES, S_UPD_HIDE_NOTES,
+    S_UPD_NOTES_LINK,
     S_UPD_FAILED_FMT, S_UPD_E_NET, S_UPD_E_SIG, S_UPD_E_FILE, S_UPD_E_RIGHTS,
     S_LANGUAGE, S_CLOSE, S_GITHUB,
     S_ERR_STRICT_ON, S_ERR_STRICT_OFF, S_ERR_AUTOSTART,
@@ -171,6 +174,8 @@ static const WCHAR *const STR[LANG_COUNT][S_COUNT] = {
                             L"exclusive fullscreen, are recognized automatically.",
         [S_STRICT_HINT]   = L"Asks for admin rights once",
         [S_AUTOUPDATE]    = L"Automatic updates",
+        [S_UPD_NOTIFY]    = L"Update notification",
+        [S_UPD_KEEP]      = L"Keep this notification on",
         [S_UPD_CHECK]     = L"Check for updates",
         [S_GITHUB]        = L"Project page on GitHub",
         [S_UPD_CHECKING]  = L"Checking...",
@@ -186,6 +191,7 @@ static const WCHAR *const STR[LANG_COUNT][S_COUNT] = {
         [S_UPD_SKIP]      = L"Skip this version\nWait for the next one",
         [S_UPD_NOTES]     = L"What's new",
         [S_UPD_HIDE_NOTES] = L"Hide what's new",
+        [S_UPD_NOTES_LINK] = L"Release notes on GitHub",
         [S_UPD_FAILED_FMT] = L"The update was not installed: %s.\n\nPauserick keeps running the current version.",
         [S_UPD_E_NET]     = L"the download failed",
         [S_UPD_E_SIG]     = L"its digital signature is not valid, so it was discarded",
@@ -248,6 +254,8 @@ static const WCHAR *const STR[LANG_COUNT][S_COUNT] = {
                             L"va a schermo intero esclusivo, sono riconosciuti da soli.",
         [S_STRICT_HINT]   = L"Chiede i diritti di admin una volta",
         [S_AUTOUPDATE]    = L"Aggiornamenti automatici",
+        [S_UPD_NOTIFY]    = L"Notifica di aggiornamento",
+        [S_UPD_KEEP]      = L"Lascia attiva questa notifica",
         [S_UPD_CHECK]     = L"Cerca aggiornamenti",
         [S_GITHUB]        = L"Pagina del progetto su GitHub",
         [S_UPD_CHECKING]  = L"Controllo in corso...",
@@ -263,6 +271,7 @@ static const WCHAR *const STR[LANG_COUNT][S_COUNT] = {
         [S_UPD_SKIP]      = L"Salta questa versione\nAspetta la prossima",
         [S_UPD_NOTES]     = L"Novità",
         [S_UPD_HIDE_NOTES] = L"Nascondi le novità",
+        [S_UPD_NOTES_LINK] = L"Note di rilascio su GitHub",
         [S_UPD_FAILED_FMT] = L"L'aggiornamento non è stato installato: %s.\n\nPauserick continua con la versione attuale.",
         [S_UPD_E_NET]     = L"il download non è riuscito",
         [S_UPD_E_SIG]     = L"la firma digitale non è valida, quindi è stato scartato",
@@ -365,7 +374,10 @@ static void settings_load(void)
     g_cfg.longEnabled    = ini_int(L"Break", L"Enabled", 1, 0, 1);
     g_cfg.longEveryMin   = ini_int(L"Break", L"EveryMinutes", 60, LIM_LONG_EVERY);
     g_cfg.longDurMin     = ini_int(L"Break", L"DurationMinutes", 3, LIM_LONG_DUR);
-    g_cfg.warnSec        = ini_int(L"General", L"WarnSeconds", 0, LIM_WARN);
+    /* Up to 1.0.2 one warning served both kinds of break: it becomes both. */
+    int oldWarn          = ini_int(L"General", L"WarnSeconds", 0, LIM_WARN);
+    g_cfg.miniWarnSec    = ini_int(L"MiniBreak", L"WarnSeconds", oldWarn, LIM_WARN);
+    g_cfg.longWarnSec    = ini_int(L"Break", L"WarnSeconds", oldWarn, LIM_WARN);
     /* Up to 1.2 the only idle setting was IdleResetMinutes (0 = off): keep "off" if it was off. */
     int oldIdle          = (int)GetPrivateProfileIntW(L"General", L"IdleResetMinutes", -1, g_ini);
     g_cfg.idlePause      = ini_int(L"General", L"IdlePause", oldIdle == 0 ? 0 : 1, 0, 1);
@@ -375,6 +387,7 @@ static void settings_load(void)
     g_cfg.lang           = ini_int(L"General", L"Language", LANG_EN, 0, LANG_COUNT - 1);
     g_cfg.gaming         = ini_int(L"Gaming", L"Enabled", 1, 0, 1);
     g_cfg.autoUpdate     = ini_int(L"Update", L"Auto", 1, 0, 1);
+    g_cfg.updateNotify   = ini_int(L"Update", L"Notify", 1, 0, 1);
     GetPrivateProfileStringW(L"Gaming", L"Games", L"", g_cfg.games, ARRAYSIZE(g_cfg.games), g_ini);
 }
 
@@ -386,7 +399,9 @@ static void settings_save(void)
     ini_put(L"Break", L"Enabled", g_cfg.longEnabled);
     ini_put(L"Break", L"EveryMinutes", g_cfg.longEveryMin);
     ini_put(L"Break", L"DurationMinutes", g_cfg.longDurMin);
-    ini_put(L"General", L"WarnSeconds", g_cfg.warnSec);
+    ini_put(L"MiniBreak", L"WarnSeconds", g_cfg.miniWarnSec);
+    ini_put(L"Break", L"WarnSeconds", g_cfg.longWarnSec);
+    WritePrivateProfileStringW(L"General", L"WarnSeconds", NULL, g_ini); /* replaced by the two above */
     ini_put(L"General", L"IdlePause", g_cfg.idlePause);
     ini_put(L"General", L"IdlePauseMinutes", g_cfg.idlePauseMin);
     ini_put(L"General", L"IdleContinue", g_cfg.idleContinue);
@@ -395,6 +410,7 @@ static void settings_save(void)
     ini_put(L"General", L"Language", g_cfg.lang);
     ini_put(L"Gaming", L"Enabled", g_cfg.gaming);
     ini_put(L"Update", L"Auto", g_cfg.autoUpdate);
+    ini_put(L"Update", L"Notify", g_cfg.updateNotify);
     WritePrivateProfileStringW(L"Gaming", L"Games", g_cfg.games, g_ini);
 }
 
@@ -459,13 +475,13 @@ static const WCHAR *resume_name(int cont) { return cont ? L"continue with the ti
 
 static void log_settings(const WCHAR *prefix, const Settings *s)
 {
-    log_info(L"%s: mini break %s every %d min for %d s | break %s every %d min for %d min | warning %d s | "
+    log_info(L"%s: mini break %s every %d min for %d s, warning %d s | break %s every %d min for %d min, warning %d s | "
              L"pause if idle %s, after %d min, when back %s | sound %s | gaming mode %s | other games '%s' | language %s | "
-             L"daily update check %s",
-             prefix, onoff(s->miniEnabled), s->miniEveryMin, s->miniDurSec, onoff(s->longEnabled), s->longEveryMin,
-             s->longDurMin, s->warnSec, onoff(s->idlePause), s->idlePauseMin, resume_name(s->idleContinue),
+             L"update check %s, notification %s",
+             prefix, onoff(s->miniEnabled), s->miniEveryMin, s->miniDurSec, s->miniWarnSec, onoff(s->longEnabled),
+             s->longEveryMin, s->longDurMin, s->longWarnSec, onoff(s->idlePause), s->idlePauseMin, resume_name(s->idleContinue),
              onoff(s->sound), onoff(s->gaming), s->games, s->lang == LANG_IT ? L"Italiano" : L"English",
-             onoff(s->autoUpdate));
+             onoff(s->autoUpdate), onoff(s->updateNotify));
 }
 
 /* one line per changed setting: "Setting changed: mini break every 30 -> 45 min" */
@@ -481,7 +497,8 @@ static void log_settings_diff(const Settings *a, const Settings *b)
     LOG_FLAG(longEnabled, L"breaks");
     LOG_NUM(longEveryMin, L"break every", L"min");
     LOG_NUM(longDurMin, L"break duration", L"min");
-    LOG_NUM(warnSec, L"warning before a break", L"s");
+    LOG_NUM(miniWarnSec, L"warning before a mini break", L"s");
+    LOG_NUM(longWarnSec, L"warning before a break", L"s");
     LOG_FLAG(idlePause, L"pause if idle");
     LOG_NUM(idlePauseMin, L"pause if idle for", L"min");
     if (a->idleContinue != b->idleContinue)
@@ -489,7 +506,8 @@ static void log_settings_diff(const Settings *a, const Settings *b)
                  resume_name(b->idleContinue));
     LOG_FLAG(sound, L"sound at the end");
     LOG_FLAG(gaming, L"gaming mode");
-    LOG_FLAG(autoUpdate, L"daily update check");
+    LOG_FLAG(autoUpdate, L"update check");
+    LOG_FLAG(updateNotify, L"update notification");
     if (lstrcmpW(a->games, b->games)) log_info(L"Setting changed: other games '%s' -> '%s'", a->games, b->games);
 #undef LOG_FLAG
 #undef LOG_NUM
@@ -1993,7 +2011,7 @@ static void tick(void)
     if (!haveBreak) { warn_close(); set_tick(30000, 5000); return; }
     if (now >= at) { start_break(type, L"scheduled"); return; }
 
-    ULONGLONG until = at - now, warnMs = (ULONGLONG)g_cfg.warnSec * 1000;
+    ULONGLONG until = at - now, warnMs = (ULONGLONG)(type == BT_LONG ? g_cfg.longWarnSec : g_cfg.miniWarnSec) * 1000;
     if (warnMs && until <= warnMs) {
         warn_show(type, at);
         set_tick(ms_to_next_second(at, now), 0);
@@ -2025,11 +2043,13 @@ static void tick(void)
 #endif
 
 #define UPDATE_API_URL   L"https://api.github.com/repos/" PAUSERICK_REPO L"/releases/latest"
-#define UPDATE_PAGE_URL  L"https://github.com/" PAUSERICK_REPO L"/releases/latest"
 #define PROJECT_URL      L"https://github.com/" PAUSERICK_REPO
 #define UPDATE_DAY       (24 * 3600)
 #define UPDATE_RETRY     (3 * 3600)    /* after a failed check (offline...) */
 #define UPDATE_FIRST_MS  90000u        /* first look after start */
+#define UPDATE_START_GAP 3600          /* ...unless the last look was less than an hour ago */
+#define UPDATE_LATER     (20 * 3600)   /* "Not now": not offered again by itself for this long, so
+                                         * tomorrow's start or daily look offers it again */
 #define UPDATE_TIMER_MS  3600000u      /* then hourly: is a day over? */
 #define UPDATE_MAX_EXE   (8u << 20)
 
@@ -2039,6 +2059,7 @@ typedef struct {
     int manual, result, web;       /* web: found through the website, GitHub's API was busy */
     DWORD err;
     WCHAR version[24];             /* "1.0.0" */
+    WCHAR tag[24];                 /* the release's tag, "v1.0.0" (checked by ver_parse) */
     WCHAR exeUrl[512], sigUrl[512];
     WCHAR notes[700];              /* release notes, plain text */
 } UpdInfo;
@@ -2287,6 +2308,7 @@ static void update_parse(const char *json, UpdInfo *u)
     MultiByteToWideChar(CP_UTF8, 0, tag, -1, v, ARRAYSIZE(v));
     int parts[3];
     if (!ver_parse(v, parts)) { u->result = UPD_ERR_DATA; return; }
+    lstrcpynW(u->tag, v, ARRAYSIZE(u->tag));
     wsprintfW(u->version, L"%d.%d.%d", parts[0], parts[1], parts[2]);
     if (!ver_newer(u->version)) { u->result = UPD_UP_TO_DATE; return; }
     for (const char *p = json; (p = json_string(p, "browser_download_url", url, sizeof url)) != NULL; ) {
@@ -2466,6 +2488,7 @@ static void update_fetch_web(UpdInfo *u)
     for (t += 14; t[n] && t[n] != L'?' && t[n] != L'#' && t[n] != L'/' && n < (int)ARRAYSIZE(tag) - 1; n++) tag[n] = t[n];
     tag[n] = 0;
     if (!ver_parse(tag, parts)) { u->result = UPD_ERR_DATA; return; }
+    lstrcpynW(u->tag, tag, ARRAYSIZE(u->tag));
     wsprintfW(u->version, L"%d.%d.%d", parts[0], parts[1], parts[2]);
     if (!ver_newer(u->version)) { u->result = UPD_UP_TO_DATE; return; }
     wsprintfW(u->exeUrl, L"%s/releases/download/%s/Pauserick.exe", base, tag);
@@ -2526,17 +2549,22 @@ static void update_checked(UpdInfo *u)
     static int failedBefore; /* while offline, log the failure once, not every 3 hours */
     InterlockedExchange(&g_updBusy, 0);
     int failed = u->result == UPD_ERR_NET || u->result == UPD_ERR_DATA;
-    ini_put_ll(L"Update", L"NextCheck", unix_now() + (failed ? UPDATE_RETRY : UPDATE_DAY));
+    LONGLONG now = unix_now();
+    ini_put_ll(L"Update", L"LastCheck", now);
+    ini_put_ll(L"Update", L"NextCheck", now + (failed ? UPDATE_RETRY : UPDATE_DAY));
     g_updLast = u->result;
     if (u->result == UPD_OK) {
         WCHAR skip[24];
         GetPrivateProfileStringW(L"Update", L"Skip", L"", skip, ARRAYSIZE(skip), g_ini);
         int skipped = !u->manual && !lstrcmpW(skip, u->version);
+        int later = !u->manual && !skipped && now < ini_ll(L"Update", L"AskAfter");
         log_info(L"Update check: version %s is available (this is %s)%s%s", u->version, APP_VERSION,
                  u->web ? L", seen on the website because GitHub's API was busy" : L"",
-                 skipped ? L", skipped as asked" : L"");
+                 skipped ? L", skipped as asked" : later ? L", 'Not now' was chosen less than a day ago" : L"");
         g_upd = *u;
-        if (!skipped) g_updPrompt = 1;
+        if (!skipped && !later && g_cfg.updateNotify) g_updPrompt = 1;
+        else if (!skipped && !later && !u->manual)
+            log_info(L"Update %s: notification off, offered in Settings and the tray menu", u->version);
         if (u->manual) PostMessageW(g_main, WM_APP_UPDATE_PROMPT, 0, 0);
     } else if (u->result == UPD_UP_TO_DATE) {
         if (u->err == 404) log_info(L"Update check: no release published yet");
@@ -2550,13 +2578,18 @@ static void update_checked(UpdInfo *u)
     HeapFree(GetProcessHeap(), 0, u);
 }
 
-/* Hourly (first 90 s after start): a day since the last check? */
+/* 90 s after start: look now, so a new version is offered soon after the PC is turned on
+ * (not if the last look was within the hour: Pauserick restarts after an update, or when
+ * Block Task Manager is switched). Then hourly: a day since the last look? */
 static void update_timer(void)
 {
+    static int started;
     update_cleanup();
     SetCoalescableTimer(g_main, TIMER_UPDATE, UPDATE_TIMER_MS, NULL, 300000);
-    LONGLONG now = unix_now(), next = ini_ll(L"Update", L"NextCheck");
+    LONGLONG now = unix_now(), next = ini_ll(L"Update", L"NextCheck"), last = ini_ll(L"Update", L"LastCheck");
     if (next > now + 2 * UPDATE_DAY) next = 0; /* the clock was set back */
+    if (!started && !(last <= now && now < last + UPDATE_START_GAP)) next = 0;
+    started = 1;
     if (g_cfg.autoUpdate && now >= next) update_check_start(0);
 }
 
@@ -3095,8 +3128,9 @@ static const Slider SLIDERS[] = {
     SLIDER(IDC_MINI_DUR,   IDC_VAL_MINI_DUR,   V_MINI_DUR,   UNIT_SEC, miniDurSec),
     SLIDER(IDC_LONG_EVERY, IDC_VAL_LONG_EVERY, V_LONG_EVERY, UNIT_MIN, longEveryMin),
     SLIDER(IDC_LONG_DUR,   IDC_VAL_LONG_DUR,   V_LONG_DUR,   UNIT_MIN, longDurMin),
-    SLIDER(IDC_WARN,       IDC_VAL_WARN,       V_WARN,       UNIT_SEC, warnSec),
     SLIDER(IDC_IDLE,       IDC_VAL_IDLE,       V_IDLE,       UNIT_MIN, idlePauseMin),
+    SLIDER(IDC_MINI_WARN,  IDC_VAL_MINI_WARN,  V_WARN,       UNIT_SEC, miniWarnSec),
+    SLIDER(IDC_LONG_WARN,  IDC_VAL_LONG_WARN,  V_WARN,       UNIT_SEC, longWarnSec),
 };
 #define NSLIDERS ((int)ARRAYSIZE(SLIDERS))
 
@@ -3151,10 +3185,12 @@ static void sliders_init(HWND d)
 /* Card switches keep their full text (read by screen readers) but show only the switch. */
 static const struct { int ctl, str; } DLG_TEXTS[] = {
     { IDC_MINI_ENABLE, S_ENABLE_MINI },   { IDC_LBL_MINI_EVERY, S_EVERY },  { IDC_LBL_MINI_DUR, S_DURATION },
+    { IDC_LBL_MINI_WARN, S_WARN },
     { IDC_LONG_ENABLE, S_ENABLE_LONG },   { IDC_LBL_LONG_EVERY, S_EVERY },  { IDC_LBL_LONG_DUR, S_DURATION },
+    { IDC_LBL_LONG_WARN, S_WARN },
     { IDC_IDLE_ENABLE, S_IDLE },          { IDC_LBL_IDLE_AFTER, S_AFTER },  { IDC_LBL_RESUME, S_WHEN_BACK },
     { IDC_AUTOSTART, S_AUTOSTART },       { IDC_STRICT, S_STRICT },         { IDC_SOUND, S_SOUND },
-    { IDC_AUTOUPDATE, S_AUTOUPDATE },     { IDC_LBL_WARN, S_WARN },
+    { IDC_AUTOUPDATE, S_AUTOUPDATE },     { IDC_UPDNOTIFY, S_UPD_NOTIFY },
     { IDC_GAMING, S_GAMING },             { IDC_LBL_GAMES, S_GAMES_HINT },  { IDC_PICK_GAMES, S_PICK },
     { IDC_LBL_GAMES_AUTO, S_GAMES_AUTO },
     { IDC_LBL_LANG, S_LANGUAGE },         { IDCANCEL, S_CLOSE },            { IDC_GITHUB, S_GITHUB },
@@ -3208,7 +3244,10 @@ static RECT child_rect(HWND d, int id)
 }
 
 static int is_card_switch(int id) { return id == IDC_MINI_ENABLE || id == IDC_LONG_ENABLE || id == IDC_IDLE_ENABLE || id == IDC_GAMING; }
-static int is_row_switch(int id)  { return id == IDC_AUTOSTART || id == IDC_STRICT || id == IDC_SOUND || id == IDC_AUTOUPDATE; }
+static int is_row_switch(int id)
+{
+    return id == IDC_AUTOSTART || id == IDC_STRICT || id == IDC_SOUND || id == IDC_AUTOUPDATE || id == IDC_UPDNOTIFY;
+}
 
 /* Windows 11's icon font, or Windows 10's; NULL if neither is installed (no icons then). */
 static HFONT icon_font(int px)
@@ -3615,9 +3654,11 @@ static void dlg_texts(HWND d)
 static void dlg_sync_enabled(HWND d)
 {
     static const int mini[] = { IDC_LBL_MINI_EVERY, IDC_MINI_EVERY, IDC_VAL_MINI_EVERY,
-                                IDC_LBL_MINI_DUR, IDC_MINI_DUR, IDC_VAL_MINI_DUR };
+                                IDC_LBL_MINI_DUR, IDC_MINI_DUR, IDC_VAL_MINI_DUR,
+                                IDC_LBL_MINI_WARN, IDC_MINI_WARN, IDC_VAL_MINI_WARN };
     static const int lng[]  = { IDC_LBL_LONG_EVERY, IDC_LONG_EVERY, IDC_VAL_LONG_EVERY,
-                                IDC_LBL_LONG_DUR, IDC_LONG_DUR, IDC_VAL_LONG_DUR };
+                                IDC_LBL_LONG_DUR, IDC_LONG_DUR, IDC_VAL_LONG_DUR,
+                                IDC_LBL_LONG_WARN, IDC_LONG_WARN, IDC_VAL_LONG_WARN };
     BOOL m = IsDlgButtonChecked(d, IDC_MINI_ENABLE) == BST_CHECKED;
     BOOL l = IsDlgButtonChecked(d, IDC_LONG_ENABLE) == BST_CHECKED;
     for (int i = 0; i < (int)ARRAYSIZE(mini); i++) {
@@ -3631,6 +3672,8 @@ static void dlg_sync_enabled(HWND d)
     static const int idle[] = { IDC_IDLE, IDC_VAL_IDLE, IDC_LBL_RESUME, IDC_RESUME };
     BOOL ip = IsDlgButtonChecked(d, IDC_IDLE_ENABLE) == BST_CHECKED;
     for (int i = 0; i < (int)ARRAYSIZE(idle); i++) EnableWindow(GetDlgItem(d, idle[i]), ip);
+    /* the update notification belongs to the automatic checks: shown only while they are on */
+    ShowWindow(GetDlgItem(d, IDC_UPDNOTIFY), IsDlgButtonChecked(d, IDC_AUTOUPDATE) == BST_CHECKED ? SW_SHOWNA : SW_HIDE);
 }
 
 /* Show the real startup state (also used to undo a click that failed). */
@@ -3653,6 +3696,7 @@ static void dlg_save_values(HWND d)
     n.idleContinue = SendDlgItemMessageW(d, IDC_RESUME, CB_GETCURSEL, 0, 0) == 1;
     n.gaming      = IsDlgButtonChecked(d, IDC_GAMING) == BST_CHECKED;
     n.autoUpdate  = IsDlgButtonChecked(d, IDC_AUTOUPDATE) == BST_CHECKED;
+    n.updateNotify = IsDlgButtonChecked(d, IDC_UPDNOTIFY) == BST_CHECKED;
     GetDlgItemTextW(d, IDC_GAMES, n.games, ARRAYSIZE(n.games));
     for (int i = 0; i < NSLIDERS; i++) *cfg_field(&n, &SLIDERS[i]) = g_dlgVal[i];
     g_fgHwnd = NULL; /* the game list may have changed: classify the foreground app again */
@@ -4090,6 +4134,7 @@ static INT_PTR CALLBACK settings_proc(HWND d, UINT m, WPARAM wp, LPARAM lp)
         CheckDlgButton(d, IDC_IDLE_ENABLE, g_cfg.idlePause ? BST_CHECKED : BST_UNCHECKED);
         CheckDlgButton(d, IDC_GAMING, g_cfg.gaming ? BST_CHECKED : BST_UNCHECKED);
         CheckDlgButton(d, IDC_AUTOUPDATE, g_cfg.autoUpdate ? BST_CHECKED : BST_UNCHECKED);
+        CheckDlgButton(d, IDC_UPDNOTIFY, g_cfg.updateNotify ? BST_CHECKED : BST_UNCHECKED);
         g_dlgLoading = 1;
         SendDlgItemMessageW(d, IDC_GAMES, EM_LIMITTEXT, ARRAYSIZE(g_cfg.games) - 1, 0);
         SetDlgItemTextW(d, IDC_GAMES, g_cfg.games);
@@ -4127,8 +4172,11 @@ static INT_PTR CALLBACK settings_proc(HWND d, UINT m, WPARAM wp, LPARAM lp)
             if (code == CBN_SELCHANGE) dlg_save_values(d);
             return TRUE;
         case IDC_SOUND:
-        case IDC_AUTOUPDATE:
+        case IDC_UPDNOTIFY:
             if (code == BN_CLICKED) dlg_save_values(d);
+            return TRUE;
+        case IDC_AUTOUPDATE:
+            if (code == BN_CLICKED) { dlg_sync_enabled(d); dlg_save_values(d); }
             return TRUE;
         case IDC_UPDATE: /* check now, or offer the version already found */
             if (code != BN_CLICKED) return TRUE;
@@ -4211,8 +4259,12 @@ static void show_settings(void)
 static HRESULT CALLBACK update_dlg_cb(HWND h, UINT n, WPARAM wp, LPARAM lp, LONG_PTR ref)
 {
     (void)wp; (void)ref;
-    if (n == TDN_CREATED) /* above other windows so it is seen, but without taking the keyboard */
+    if (n == TDN_CREATED) { /* above other windows so it is seen, but without taking the keyboard */
         SetWindowPos(h, HWND_TOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE);
+#ifdef PAUSERICK_TEST_TASK
+        if (g_offscreen) SetWindowPos(h, NULL, -32000, -32000, 0, 0, SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE);
+#endif
+    }
     else if (n == TDN_HYPERLINK_CLICKED && lp)
         open_url((LPCWSTR)lp);
     return S_OK;
@@ -4251,10 +4303,12 @@ static void update_prompt(void)
     if (open || !g_upd.version[0] || g_updBusy) return;
     open = 1;
     g_updPrompt = 0;
-    WCHAR title[96], text[400], footer[200];
+    WCHAR title[96], text[400], footer[600], base[300];
     wsprintfW(title, T(S_UPD_TITLE_FMT), g_upd.version);
     wsprintfW(text, T(S_UPD_TEXT_FMT), APP_VERSION);
-    wsprintfW(footer, L"<a href=\"%s\">github.com/%s</a>", UPDATE_PAGE_URL, L"" PAUSERICK_REPO);
+    update_web_base(base, ARRAYSIZE(base)); /* the release's page: its notes, in full */
+    if (g_upd.tag[0]) wsprintfW(footer, L"<a href=\"%s/releases/tag/%s\">%s</a>", base, g_upd.tag, T(S_UPD_NOTES_LINK));
+    else              wsprintfW(footer, L"<a href=\"%s/releases/latest\">%s</a>", base, T(S_UPD_NOTES_LINK));
     TASKDIALOG_BUTTON buttons[] = { { 100, T(S_UPD_INSTALL) }, { 101, T(S_UPD_LATER) }, { 102, T(S_UPD_SKIP) } };
     TASKDIALOGCONFIG tc = { sizeof tc };
     tc.hInstance = g_inst;
@@ -4273,10 +4327,21 @@ static void update_prompt(void)
     tc.cButtons = ARRAYSIZE(buttons);
     tc.nDefaultButton = 100;
     tc.pfCallback = update_dlg_cb;
+    if (g_cfg.updateNotify) { /* it can be turned off right here */
+        tc.pszVerificationText = T(S_UPD_KEEP);
+        tc.dwFlags |= TDF_VERIFICATION_FLAG_CHECKED;
+    }
     int choice = 101;
+    BOOL keep = TRUE;
     log_info(L"Update %s offered", g_upd.version);
-    if (FAILED(TaskDialogIndirect(&tc, &choice, NULL, NULL))) choice = 101;
+    if (FAILED(TaskDialogIndirect(&tc, &choice, NULL, &keep))) { choice = 101; keep = TRUE; }
     open = 0;
+    if (g_cfg.updateNotify && !keep) {
+        g_cfg.updateNotify = 0;
+        settings_save();
+        log_info(L"Setting changed: update notification on -> off (in the update window)");
+        if (g_settings) CheckDlgButton(g_settings, IDC_UPDNOTIFY, BST_UNCHECKED);
+    }
     if (choice == 100 && !InterlockedCompareExchange(&g_updBusy, 1, 0)) {
         log_info(L"Update %s: installing", g_upd.version);
         HANDLE t = CreateThread(NULL, 0, update_install_thread, NULL, 0, NULL);
@@ -4286,6 +4351,7 @@ static void update_prompt(void)
         WritePrivateProfileStringW(L"Update", L"Skip", g_upd.version, g_ini);
         log_info(L"Update %s skipped: waiting for the next version", g_upd.version);
     } else if (choice != 100) {
+        ini_put_ll(L"Update", L"AskAfter", unix_now() + UPDATE_LATER);
         log_info(L"Update %s: not now, asking again tomorrow", g_upd.version);
     }
     if (g_settings) dlg_update_link(g_settings);
@@ -4787,6 +4853,7 @@ static void schedtest(const WCHAR *outPath)
 static void prompttest(void)
 {
     lstrcpyW(g_upd.version, L"1.5.0");
+    lstrcpyW(g_upd.tag, L"v1.5.0");
     lstrcpyW(g_upd.exeUrl, L"https://127.0.0.1/none");
     lstrcpyW(g_upd.sigUrl, L"https://127.0.0.1/none");
     lstrcpyW(g_upd.notes, L"- Example change one\n- Example change two");

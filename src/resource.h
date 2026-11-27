@@ -9,12 +9,14 @@
 #define IDC_VAL_MINI_EVERY  1003
 #define IDC_MINI_DUR        1004
 #define IDC_VAL_MINI_DUR    1005
+#define IDC_MINI_WARN       1006 /* warning before a mini break */
+#define IDC_VAL_MINI_WARN   1007
 #define IDC_LONG_EVERY      1012
 #define IDC_VAL_LONG_EVERY  1013
 #define IDC_LONG_DUR        1014
 #define IDC_VAL_LONG_DUR    1015
-#define IDC_WARN            1024
-#define IDC_VAL_WARN        1025
+#define IDC_LONG_WARN       1016 /* warning before a break */
+#define IDC_VAL_LONG_WARN   1017
 #define IDC_IDLE            1026 /* pause if idle for... */
 #define IDC_VAL_IDLE        1027
 
@@ -32,6 +34,7 @@
 #define IDC_AUTOUPDATE      1035 /* check for updates every day */
 #define IDC_UPDATE          1036 /* header link: check now / install the new version */
 #define IDC_GITHUB          1037 /* header: GitHub mark, opens the project page */
+#define IDC_UPDNOTIFY       1038 /* update notification: the window offering a new version */
 
 #define IDC_STATUS          1031
 
@@ -46,9 +49,10 @@
 /* static labels (translated at runtime) */
 #define IDC_LBL_MINI_EVERY  1102
 #define IDC_LBL_MINI_DUR    1104
+#define IDC_LBL_MINI_WARN   1106
 #define IDC_LBL_LONG_EVERY  1112
 #define IDC_LBL_LONG_DUR    1114
-#define IDC_LBL_WARN        1122
+#define IDC_LBL_LONG_WARN   1116
 #define IDC_LBL_IDLE_AFTER  1124
 #define IDC_LBL_RESUME      1125
 #define IDC_LBL_LANG        1126

@@ -3,7 +3,7 @@
 A tiny, strict break reminder for Windows 10/11, in the spirit of Stretchly and Workrave
 ([how they compare](#compared-with-stretchly-and-workrave)).
 It's plain Win32/C with no runtime or framework, and the executable is about 220 KB.
-Everything runs on your PC: the only network access is an optional daily update check.
+Everything runs on your PC: the only network access is an optional update check (at start and once a day).
 
 ![A mini break: a notice counts down in the corner, then the whole screen turns black and shows the time left](docs/break.gif)
 
@@ -22,7 +22,7 @@ The notes of every release link to its [VirusTotal](https://www.virustotal.com) 
 can disable Task Manager and updates itself is exactly what antivirus heuristics tend to flag, so an occasional generic detection is
 possible. The scan lets you check before running it, and the whole source is here.
 
-Current release, 1.0.2: [VirusTotal scan](https://www.virustotal.com/gui/file/febd39ddf6a4b1c504e29ecb788bb81188abd26866543259cc8665adecdf5600)
+Release 1.0.2: [VirusTotal scan](https://www.virustotal.com/gui/file/febd39ddf6a4b1c504e29ecb788bb81188abd26866543259cc8665adecdf5600)
 of `Pauserick.exe`, SHA-256 `febd39ddf6a4b1c504e29ecb788bb81188abd26866543259cc8665adecdf5600`.
 
 ## Install
@@ -70,13 +70,13 @@ Stretchly and Workrave do more: both also run on Linux (Stretchly on macOS too),
 
 ## Updates
 
-Once a day Pauserick asks GitHub whether there is a newer release (the first time 90 s after it starts, if a day has passed). When there is, it asks you, at a quiet moment (never during a break, a game or a fullscreen video):
+Pauserick asks GitHub whether there is a newer release 90 s after it starts (when you turn on the PC), and then once a day. The start check is skipped if the last one was less than an hour ago (Pauserick restarts after an update, or when **Block Task Manager** is switched). You don't need to open Settings: when there is a new version, a window offers it by itself (unless **Update notification** is off), at a quiet moment (never during a break, a game or a fullscreen video), without taking the keyboard from what you're doing:
 
 - **Install now**: it downloads the new version, checks its digital signature and restarts itself;
-- **Not now**: it asks again the next day;
+- **Not now**: it asks again the next day (not before 20 hours, even if you restart the PC);
 - **Skip this version**: it stays quiet until a later version comes out.
 
-**Check for updates** in the top right corner of Settings checks right away. The daily check can be turned off in Settings (**Automatic updates**).
+The window links to the version's release notes on GitHub, and **What's new** shows them right there. Untick **Keep this notification on** in it and no window comes up again by itself: new versions then show only in Settings and the tray menu, until you turn **Update notification** back on. **Check for updates** in the top right corner of Settings checks right away. The automatic checks can be turned off in Settings (**Automatic updates**).
 
 Every release carries `Pauserick.exe.sig`, an ECDSA P-256 signature made with the maintainer's private key, over the exe and the version it claims. Pauserick contains the matching public key and installs a download only if the signature matches. So nobody else can push an update to your PC: not someone in the middle of your connection, and not even someone who took over the GitHub account, because the private key never leaves the maintainer's PC. An older signed version can't be passed off as a newer one either. If the exe's folder needs administrator rights (Program Files), Windows asks for them when you click Install, unless Pauserick already runs elevated.
 
@@ -85,7 +85,7 @@ To install a newer exe by hand while **Block Task Manager** is on: Exit Pauseric
 ## Privacy
 
 - No telemetry, no accounts, no ads. Settings and the log stay in `%APPDATA%\Pauserick`.
-- The only connections are to GitHub, over HTTPS: once a day to `api.github.com` to read the latest release (a few KB), and to `github.com` to download it when you choose Install. If GitHub's API is busy (it answers only 60 requests an hour per internet address, which a shared network can use up), Pauserick reads the latest version from the `github.com` releases page instead. GitHub sees what any web request shows: your IP address and the app name and version (for example `Pauserick/1.0.1`). Nothing about you or your PC is sent.
+- The only connections are to GitHub, over HTTPS: when Pauserick starts (at most once an hour) and once a day to `api.github.com` to read the latest release (a few KB), and to `github.com` to download it when you choose Install. If GitHub's API is busy (it answers only 60 requests an hour per internet address, which a shared network can use up), Pauserick reads the latest version from the `github.com` releases page instead. GitHub sees what any web request shows: your IP address and the app name and version (for example `Pauserick/1.0.1`). Nothing about you or your PC is sent.
 - Turn off **Automatic updates** and Pauserick never goes online by itself.
 
 ## Settings
@@ -97,12 +97,14 @@ The window follows the Windows 11 look: a header with the logo, the live status 
 | Setting | Meaning |
 |---|---|
 | Mini break: every / duration | On by default, every 30 min for 30 s. Sliders: 1 min to 2 h / 5 s to 5 min. Short, to rest your eyes |
+| Mini break: warn before | Off by default. Slider: Off to 2 min. Shows a small corner notice, "Mini break in 10 s". It has no buttons, so a break can't be postponed |
 | Break: every / duration | On by default, every hour for 3 min. Sliders: 10 min to 4 h / 1 min to 1 h. Longer, to get up and move. When both are due, the break takes the mini break's place (see [below](#mini-breaks-and-breaks-together)) |
+| Break: warn before | The same notice before a break, with its own slider (Off by default). A warning set in an earlier version (one slider for both) carries over to both |
 | Start with Windows | On or off at any time. Normally this is an HKCU `Run` entry. With Task Manager blocking on, it is the logon trigger of that task |
 | Block Task Manager during breaks | Off by default. When on, Pauserick runs from `C:\Program Files\Pauserick` with admin rights, through a scheduled task named "Pauserick". That lets it disable Task Manager during breaks and also block input aimed at elevated windows |
 | Sound when a break ends | Windows "Asterisk" system sound |
-| Automatic updates | On by default: once a day it looks for a new version. See [Updates](#updates) |
-| Warn before | Slider: Off to 2 min. Shows a small corner notice, "Mini break in 10 s". It has no buttons, so a break can't be postponed |
+| Automatic updates | On by default: it looks for a new version when it starts and once a day. See [Updates](#updates) |
+| Update notification | Shown while Automatic updates is on; on by default. A new version is offered in a window by itself. Off: no window, the new version shows only in Settings (**Install version X** in the top right corner) and in the tray menu. It can also be turned off in the window itself (**Keep this notification on**) |
 | Inactivity: after | On by default, 3 min. Slider: 1 min to 1 h. After this long without keyboard or mouse input Pauserick pauses: the countdown stops, the tray icon's pause bars turn red and the status reads "Paused: the PC is idle". Sound playing or a fullscreen window counts as watching, so a video still gets its breaks: the pause needs 30 s with nothing playing. The first input ends the pause. The card's switch turns it off |
 | When back | What the timers do after an idle pause: **Restart the timers from zero** ("Riparti da capo con il timer" in Italian, the default) or **Continue with the time left**, that is, from where the countdown stopped when the pause began. A locked or sleeping PC always stops the timers. Once back, they restart from zero if it lasted at least the idle time and "restart" is chosen; otherwise they continue |
 | Language | At the bottom: English or Italiano, each with its flag. Applies at once to Settings, the tray menu, the warning and the break screen |
