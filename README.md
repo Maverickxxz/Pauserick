@@ -22,6 +22,9 @@ The notes of every release link to its [VirusTotal](https://www.virustotal.com) 
 can disable Task Manager and updates itself is exactly what antivirus heuristics tend to flag, so an occasional generic detection is
 possible. The scan lets you check before running it, and the whole source is here.
 
+Current release, 1.0.2: [VirusTotal scan](https://www.virustotal.com/gui/file/febd39ddf6a4b1c504e29ecb788bb81188abd26866543259cc8665adecdf5600)
+of `Pauserick.exe`, SHA-256 `febd39ddf6a4b1c504e29ecb788bb81188abd26866543259cc8665adecdf5600`.
+
 ## Install
 
 1. Copy `Pauserick.exe` to a permanent folder, for example `%LOCALAPPDATA%\Programs\Pauserick\`.
