@@ -49,6 +49,7 @@ FONT 9, "Segoe UI", 400, 0, 0x1
 BEGIN
     LTEXT           "", IDC_STATUS, 48, 21, 200, 9, SS_ENDELLIPSIS | SS_NOPREFIX
     PUSHBUTTON      "", IDC_UPDATE, 254, 18, 130, 12
+    PUSHBUTTON      "GitHub", IDC_GITHUB, 371, 3, 16, 14
 
     /* ---- left column ---- */
     GROUPBOX        "", IDC_GRP_MINI, 8, 42, 184, 68, NOT WS_VISIBLE

@@ -31,6 +31,7 @@
 #define IDC_RESUME          1034 /* when back from an idle pause: restart / continue */
 #define IDC_AUTOUPDATE      1035 /* check for updates every day */
 #define IDC_UPDATE          1036 /* header link: check now / install the new version */
+#define IDC_GITHUB          1037 /* header: GitHub mark, opens the project page */
 
 #define IDC_STATUS          1031
 

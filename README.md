@@ -89,7 +89,7 @@ To install a newer exe by hand while **Block Task Manager** is on: Exit Pauseric
 
 ![Pauserick settings](docs/settings.png)
 
-The window follows the Windows 11 look: a header with the logo, the live status ("Next mini break in 34:12") and a bar showing how far along the countdown is, then the settings on white cards in two columns, each with an icon, a title and a short description. Switches turn things on and off; a card's switch sits in its title row and greys out the rest of the card when off. The language choice is at the very bottom, with a flag next to each language. The status dot is teal while counting and red while breaks are on hold (PC locked or idle, a game in front).
+The window follows the Windows 11 look: a header with the logo, the live status ("Next mini break in 34:12") and a bar showing how far along the countdown is, and on the right the version, the GitHub mark (opens the project page in your browser) and the update link; then the settings on white cards in two columns, each with an icon, a title and a short description. Switches turn things on and off; a card's switch sits in its title row and greys out the rest of the card when off. The language choice is at the very bottom, with a flag next to each language. The status dot is teal while counting and red while breaks are on hold (PC locked or idle, a game in front).
 
 | Setting | Meaning |
 |---|---|

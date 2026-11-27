@@ -121,7 +121,7 @@ enum {
     S_UPD_CHECK, S_UPD_CHECKING, S_UPD_LATEST, S_UPD_CHECK_FAILED, S_UPD_GET_FMT, S_UPD_TRAY_FMT,
     S_UPD_TITLE_FMT, S_UPD_TEXT_FMT, S_UPD_INSTALL, S_UPD_LATER, S_UPD_SKIP, S_UPD_NOTES, S_UPD_HIDE_NOTES,
     S_UPD_FAILED_FMT, S_UPD_E_NET, S_UPD_E_SIG, S_UPD_E_FILE, S_UPD_E_RIGHTS,
-    S_LANGUAGE, S_CLOSE,
+    S_LANGUAGE, S_CLOSE, S_GITHUB,
     S_ERR_STRICT_ON, S_ERR_STRICT_OFF, S_ERR_AUTOSTART,
     S_GAMING_GROUP, S_GAMING, S_GAMES_HINT, S_GAMES_CUE, S_PAUSED_FOR, S_PICK, S_NO_APPS, S_OPEN_LOG,
     S_COUNT
@@ -172,6 +172,7 @@ static const WCHAR *const STR[LANG_COUNT][S_COUNT] = {
         [S_STRICT_HINT]   = L"Asks for admin rights once",
         [S_AUTOUPDATE]    = L"Automatic updates",
         [S_UPD_CHECK]     = L"Check for updates",
+        [S_GITHUB]        = L"Project page on GitHub",
         [S_UPD_CHECKING]  = L"Checking...",
         [S_UPD_LATEST]    = L"You have the latest version",
         [S_UPD_CHECK_FAILED] = L"Check failed: no connection?",
@@ -248,6 +249,7 @@ static const WCHAR *const STR[LANG_COUNT][S_COUNT] = {
         [S_STRICT_HINT]   = L"Chiede i diritti di admin una volta",
         [S_AUTOUPDATE]    = L"Aggiornamenti automatici",
         [S_UPD_CHECK]     = L"Cerca aggiornamenti",
+        [S_GITHUB]        = L"Pagina del progetto su GitHub",
         [S_UPD_CHECKING]  = L"Controllo in corso...",
         [S_UPD_LATEST]    = L"Hai l'ultima versione",
         [S_UPD_CHECK_FAILED] = L"Controllo non riuscito: sei offline?",
@@ -2024,6 +2026,7 @@ static void tick(void)
 
 #define UPDATE_API_URL   L"https://api.github.com/repos/" PAUSERICK_REPO L"/releases/latest"
 #define UPDATE_PAGE_URL  L"https://github.com/" PAUSERICK_REPO L"/releases/latest"
+#define PROJECT_URL      L"https://github.com/" PAUSERICK_REPO
 #define UPDATE_DAY       (24 * 3600)
 #define UPDATE_RETRY     (3 * 3600)    /* after a failed check (offline...) */
 #define UPDATE_FIRST_MS  90000u        /* first look after start */
@@ -2321,6 +2324,21 @@ static void update_web_base(WCHAR *url, int cch)
 #ifdef PAUSERICK_TEST_TASK
     GetPrivateProfileStringW(L"Update", L"TestWeb", url, url, (DWORD)cch, g_ini);
 #endif
+}
+
+/* Opens a web page in the default browser. Elevated (Block Task Manager), the address goes
+ * through Explorer, which hands it to the desktop's unelevated Explorer: the browser must not
+ * get administrator rights. Only https links: release notes can hold links too. */
+static void open_url(const WCHAR *url)
+{
+    if (CompareStringOrdinal(url, 8, L"https://", 8, TRUE) != CSTR_EQUAL) return;
+    WCHAR ex[MAX_PATH];
+    UINT n = g_elevated ? GetWindowsDirectoryW(ex, MAX_PATH - 16) : 0;
+    if (n && n < MAX_PATH - 16) {
+        lstrcatW(ex, L"\\explorer.exe");
+        if ((INT_PTR)ShellExecuteW(NULL, L"open", ex, url, NULL, SW_SHOWNORMAL) > 32) return;
+    }
+    ShellExecuteW(NULL, L"open", url, NULL, NULL, SW_SHOWNORMAL);
 }
 
 /* Does the signature (64 bytes, r||s) fit "PAUSERICK-UPDATE\n" + version + "\n" + exe? */
@@ -2810,6 +2828,51 @@ static void draw_flag(HDC dc, int x, int y, int h, int lang, COLORREF bg)
     aa_render(dc, x, y, h * 3 / 2, h, flag_shade, &f);
 }
 
+/* GitHub's mark (the "mark-github" octicon): one outline in a 16 x 16 box, in hundredths,
+ * flattened from its SVG path by tools/github-mark.py. */
+static const short GH_MARK[][2] = { /* 173 points, tools/github-mark.py */
+    {800, 0}, {718, 4}, {639, 16}, {562, 36}, {489, 63}, {419, 97}, {353, 137}, {291, 183},
+    {234, 234}, {183, 291}, {137, 353}, {97, 419}, {63, 489}, {36, 562}, {16, 639}, {4, 718},
+    {0, 800}, {3, 866}, {10, 930}, {23, 992}, {41, 1053}, {63, 1112}, {89, 1168}, {120, 1221},
+    {154, 1272}, {192, 1321}, {234, 1366}, {279, 1407}, {327, 1445}, {378, 1480}, {432, 1510}, {488, 1537},
+    {547, 1559}, {572, 1559}, {590, 1550}, {599, 1537}, {602, 1521}, {601, 1372}, {532, 1380}, {476, 1379},
+    {432, 1370}, {397, 1356}, {371, 1337}, {353, 1317}, {340, 1296}, {332, 1278}, {320, 1253}, {300, 1220},
+    {276, 1187}, {250, 1165}, {229, 1151}, {214, 1133}, {212, 1125}, {217, 1119}, {229, 1114}, {249, 1112},
+    {272, 1114}, {293, 1121}, {312, 1131}, {328, 1144}, {355, 1171}, {372, 1194}, {401, 1232}, {432, 1258},
+    {465, 1274}, {498, 1280}, {530, 1280}, {559, 1276}, {605, 1260}, {613, 1224}, {625, 1195}, {639, 1171},
+    {656, 1154}, {589, 1144}, {524, 1127}, {463, 1101}, {434, 1084}, {407, 1064}, {383, 1040}, {360, 1013},
+    {341, 982}, {324, 947}, {310, 907}, {300, 863}, {294, 814}, {292, 759}, {298, 697}, {314, 640},
+    {340, 589}, {374, 544}, {366, 518}, {359, 472}, {358, 442}, {361, 409}, {369, 372}, {382, 332},
+    {395, 330}, {435, 334}, {465, 343}, {503, 358}, {549, 381}, {602, 414}, {651, 402}, {700, 394},
+    {751, 389}, {802, 387}, {853, 389}, {904, 394}, {953, 402}, {1002, 414}, {1055, 381}, {1101, 357},
+    {1139, 342}, {1169, 334}, {1193, 331}, {1209, 330}, {1222, 332}, {1235, 372}, {1243, 409}, {1246, 442},
+    {1245, 472}, {1238, 518}, {1230, 544}, {1264, 589}, {1290, 640}, {1306, 696}, {1312, 759}, {1310, 814},
+    {1304, 863}, {1294, 908}, {1280, 947}, {1263, 983}, {1243, 1014}, {1221, 1041}, {1196, 1064}, {1169, 1084},
+    {1141, 1101}, {1079, 1127}, {1014, 1144}, {947, 1154}, {968, 1177}, {985, 1209}, {997, 1251}, {1001, 1302},
+    {1000, 1522}, {1003, 1538}, {1012, 1552}, {1030, 1560}, {1055, 1560}, {1157, 1517}, {1253, 1461}, {1340, 1392},
+    {1416, 1312}, {1481, 1222}, {1532, 1123}, {1570, 1019}, {1592, 911}, {1600, 800}, {1596, 718}, {1584, 639},
+    {1564, 562}, {1537, 489}, {1503, 419}, {1463, 353}, {1417, 291}, {1366, 234}, {1309, 183}, {1247, 137},
+    {1181, 97}, {1111, 63}, {1038, 36}, {961, 16}, {882, 4},
+};
+
+typedef struct { Scene bg; double x, y, k; COLORREF fg; } MarkCtx; /* k: pixels per hundredth */
+
+static COLORREF mark_shade(double px, double py, const void *ctx)
+{
+    const MarkCtx *m = (const MarkCtx *)ctx;
+    double u = (px - m->x) / m->k, v = (py - m->y) / m->k;
+    if ((u - 800) * (u - 800) + (v - 800) * (v - 800) < 810.0 * 810.0) { /* the mark fits in this circle */
+        int in = 0, n = (int)ARRAYSIZE(GH_MARK);
+        for (int i = 0, j = n - 1; i < n; j = i++) { /* even-odd: edges crossed by a ray to the right */
+            double yi = GH_MARK[i][1], yj = GH_MARK[j][1];
+            if ((yi > v) != (yj > v) && u < GH_MARK[j][0] + (v - yj) * (GH_MARK[i][0] - GH_MARK[j][0]) / (yi - yj))
+                in = !in;
+        }
+        if (in) return m->fg;
+    }
+    return scene_shade(px, py, &m->bg);
+}
+
 /* ---- slider: Pauserick's own control, so the thumb can be a round knob ----
  * It answers the trackbar messages the dialog uses (TBM_SETRANGE / SETPOS / GETPOS)
  * and reports to the parent with WM_HSCROLL like a trackbar: TB_THUMBTRACK while
@@ -3094,7 +3157,7 @@ static const struct { int ctl, str; } DLG_TEXTS[] = {
     { IDC_AUTOUPDATE, S_AUTOUPDATE },     { IDC_LBL_WARN, S_WARN },
     { IDC_GAMING, S_GAMING },             { IDC_LBL_GAMES, S_GAMES_HINT },  { IDC_PICK_GAMES, S_PICK },
     { IDC_LBL_GAMES_AUTO, S_GAMES_AUTO },
-    { IDC_LBL_LANG, S_LANGUAGE },         { IDCANCEL, S_CLOSE },
+    { IDC_LBL_LANG, S_LANGUAGE },         { IDCANCEL, S_CLOSE },            { IDC_GITHUB, S_GITHUB },
 };
 
 static int g_dlgLoading; /* filling the games field ourselves: ignore EN_CHANGE */
@@ -3300,7 +3363,7 @@ static void ui_paint_static(HWND d, HDC dc, int w, int h)
     SelectObject(dc, g_ui.fTitle);
     SetTextColor(dc, C_TEXT);
     DrawTextW(dc, APP_NAME, -1, &r, DT_SINGLELINE | DT_NOPREFIX | DT_VCENTER);
-    r = dlu_rect(d, 250, 6, 134, 10);
+    r = dlu_rect(d, 250, 6, 117, 10); /* left of the GitHub mark and its focus ring */
     SelectObject(dc, font);
     SetTextColor(dc, C_TEXT2);
     DrawTextW(dc, L"v" APP_VERSION, -1, &r, DT_SINGLELINE | DT_NOPREFIX | DT_RIGHT);
@@ -3423,6 +3486,21 @@ static LRESULT ui_custom_draw(HWND d, const NMCUSTOMDRAW *cd)
             FillRect(dc, &u, br);
             DeleteObject(br);
         }
+        SelectObject(dc, oldFont);
+        return CDRF_SKIPDEFAULT;
+    }
+    if (id == IDC_GITHUB) { /* GitHub's mark: grey; under the mouse darker, on a light grey square */
+        UINT s = cd->uItemState;
+        int size = px96(16), hot = (s & (CDIS_HOT | CDIS_SELECTED)) != 0, down = (s & CDIS_SELECTED) != 0;
+        double in = px96(2), rad = px96(4);
+        MarkCtx m = { { C_BG, 0, { { 0 } } }, r.left + (r.right - r.left - size) / 2, r.top + (r.bottom - r.top - size) / 2,
+                      size / 1600.0, hot && !down ? C_TEXT : C_TEXT2 };
+        if (keys) {
+            scene_add(&m.bg, r.left, r.top, r.right, r.bottom, rad + in, C_TEXT);
+            scene_add(&m.bg, r.left + in / 2, r.top + in / 2, r.right - in / 2, r.bottom - in / 2, rad + in / 2, C_BG);
+        }
+        if (hot) scene_add(&m.bg, r.left + in, r.top + in, r.right - in, r.bottom - in, rad, down ? RGB(236, 236, 236) : RGB(229, 229, 229));
+        aa_render(dc, r.left, r.top, r.right - r.left, r.bottom - r.top, mark_shade, &m);
         SelectObject(dc, oldFont);
         return CDRF_SKIPDEFAULT;
     }
@@ -3953,6 +4031,13 @@ static INT_PTR CALLBACK settings_proc(HWND d, UINT m, WPARAM wp, LPARAM lp)
         if (((NMHDR *)lp)->code != NM_CUSTOMDRAW) break;
         SetWindowLongPtrW(d, DWLP_MSGRESULT, ui_custom_draw(d, (NMCUSTOMDRAW *)lp));
         return TRUE;
+    case WM_SETCURSOR: /* the header links show the hand */
+        if (LOWORD(lp) == HTCLIENT && ((HWND)wp == GetDlgItem(d, IDC_GITHUB) || (HWND)wp == GetDlgItem(d, IDC_UPDATE))) {
+            SetCursor(LoadCursorW(NULL, (LPCWSTR)IDC_HAND));
+            SetWindowLongPtrW(d, DWLP_MSGRESULT, TRUE);
+            return TRUE;
+        }
+        break;
     case WM_CTLCOLORSTATIC:
     case WM_CTLCOLORBTN:
         if (!g_ui.brCard) break;
@@ -4050,6 +4135,9 @@ static INT_PTR CALLBACK settings_proc(HWND d, UINT m, WPARAM wp, LPARAM lp)
             if (g_upd.version[0]) PostMessageW(g_main, WM_APP_UPDATE_PROMPT, 0, 0);
             else update_check_start(1);
             return TRUE;
+        case IDC_GITHUB:
+            if (code == BN_CLICKED) open_url(PROJECT_URL);
+            return TRUE;
         case IDC_GAMING:
             if (code == BN_CLICKED) { dlg_sync_enabled(d); dlg_save_values(d); }
             return TRUE;
@@ -4126,7 +4214,7 @@ static HRESULT CALLBACK update_dlg_cb(HWND h, UINT n, WPARAM wp, LPARAM lp, LONG
     if (n == TDN_CREATED) /* above other windows so it is seen, but without taking the keyboard */
         SetWindowPos(h, HWND_TOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE);
     else if (n == TDN_HYPERLINK_CLICKED && lp)
-        ShellExecuteW(NULL, L"open", (LPCWSTR)lp, NULL, NULL, SW_SHOWNORMAL);
+        open_url((LPCWSTR)lp);
     return S_OK;
 }
 
